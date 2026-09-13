@@ -43,6 +43,10 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     };
   }, [overlayActive]);
 
+  useEffect(() => {
+    document.body.style.overflow = '';
+  }, [pathname]);
+
   const isLanding = pathname === '/';
   const isAuthOrLanding = pathname === '/' || pathname?.startsWith('/auth') || pathname?.startsWith('/auth/');
   // Legal/documentation routes are public — never behind the auth guard, and
@@ -114,7 +118,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="min-h-screen bg-background flex items-center justify-center p-4 safe-area-all">
         <div className="flex flex-col items-center gap-4 text-center animate-fade-in">
           <div className="w-16 h-16 rounded-2xl overflow-hidden border border-primary/20 shadow-xl relative shrink-0">
-            <img src="/logo.jpg" alt="GamerZ Hub" className="w-full h-full object-cover" loading="eager" decoding="async" />
+            <img src="/logo.webp" alt="GamerZ Hub" className="w-full h-full object-cover" loading="eager" decoding="async" />
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></div>
@@ -147,7 +151,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         <Navbar hidden={navHidden} />
       </header>
       
-      <div className={`w-full transition-[padding,transform] duration-300 ease-in-out relative z-10 ${overlayActive && !isMessages && !isSearch ? 'scale-[0.985]' : ''} ${!isLanding ? (isMessages || isSearch ? 'pt-0 pb-0' : (navHidden ? 'pt-0 pb-0' : 'pt-16 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0')) : ''}`}>
+      <div className={`w-full transition-[padding,transform] duration-300 ease-in-out relative z-10 ${overlayActive && !isMessages && !isSearch ? 'scale-[0.985]' : ''} ${!isLanding ? (isMessages || isSearch ? 'pt-0 pb-0' : 'pt-16 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-8') : ''}`}>
         <div className={`w-full max-w-7xl mx-auto flex gap-3 lg:gap-4.5 ${isMessages || isSearch ? 'px-0 py-0' : 'px-2 sm:px-4 md:px-6 py-2.5 md:py-5'}`}>
           {!hideSidebar && !isServerPage && !isMessages && (
             <aside aria-label="Control Panel" className="hidden md:block shrink-0">

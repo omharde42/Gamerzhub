@@ -54,7 +54,7 @@ export function MobileBottomNav({ hidden = false }: { hidden?: boolean }) {
       aria-hidden={hidden || undefined}
       inert={hidden}
     >
-      <div className="bg-background/95 backdrop-blur-xl border-t border-primary/20 shadow-[0_-4px_20px_hsl(var(--background)/0.9)] safe-area-bottom">
+      <div className="bg-background/95 backdrop-blur-xl border-t border-primary/20 shadow-[0_-4px_20px_hsl(var(--background)/0.9)] safe-area-bottom relative">
         <div className="grid grid-cols-4 items-center justify-items-center w-full px-1 py-1.5">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
@@ -65,14 +65,17 @@ export function MobileBottomNav({ hidden = false }: { hidden?: boolean }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center justify-center gap-0.5 px-0.5 py-1 text-[9.5px] xs:text-[10px] font-bold transition-all duration-200 min-w-0 relative select-none ${
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 px-0.5 py-1.5 text-[9.5px] xs:text-[10px] font-bold transition-all duration-200 min-w-0 relative select-none ${
                   active ? 'text-emerald-400' : 'text-muted-foreground/75 hover:text-foreground'
                 }`}
               >
+                {active && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-9 h-[3px] bg-emerald-400 rounded-b-full shadow-[0_0_12px_rgba(52,211,153,0.9)] z-20" />
+                )}
                 <div className="relative">
                   <Icon
                     className={`h-5 w-5 transition-all duration-200 ${
-                      active ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)] scale-110' : 'text-muted-foreground/80'
+                      active ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)] scale-110' : 'text-muted-foreground/80'
                     }`}
                   />
                   {isChat && totalChatUnread > 0 && (
@@ -84,9 +87,6 @@ export function MobileBottomNav({ hidden = false }: { hidden?: boolean }) {
                 <span className="truncate max-w-full text-center leading-tight tracking-tight px-0.5">
                   {item.label}
                 </span>
-                {active && (
-                  <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                )}
               </Link>
             );
           })}

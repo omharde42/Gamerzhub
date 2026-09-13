@@ -90,6 +90,11 @@ model User {
   blockedBy           UserBlock[]  @relation("BlockedBy")
   videoClips          VideoClip[]
   montageProjects     MontageProject[]
+  freeFireProfile     FreeFireProfile?
+  freeFireRequestsSent FreeFireTeammateRequest[] @relation("FreeFireRequestsSent")
+  freeFireRequestsReceived FreeFireTeammateRequest[] @relation("FreeFireRequestsReceived")
+  freeFireRatingsGiven FreeFireSessionRating[] @relation("FreeFireRatingsGiven")
+  freeFireRatingsReceived FreeFireSessionRating[] @relation("FreeFireRatingsReceived")
   profileViews        ProfileView[]
   postViews           PostView[]
   chatMessageReactions ChatMessageReaction[]
@@ -99,6 +104,7 @@ model User {
   tournamentActivities TournamentActivityFeed[]
   tournamentInvitationsSent TournamentInvitation[] @relation("InvitationsSent")
   tournamentInvitationsReceived TournamentInvitation[] @relation("InvitationsReceived")
+  organizerRatings    TournamentOrganizerRating[]
   @@index([email])
   @@index([role])
 }
@@ -685,6 +691,7 @@ model Tournament {
   payoutStage     String           @default("PENDING") // PENDING | DISTRIBUTING | COMPLETED
   payoutDetails   Json?
   mapPool         String[]         @default([])
+  customFields    Json?
   startDate       DateTime
   endDate         DateTime?
   registrationEnd DateTime?
@@ -699,30 +706,38 @@ model Tournament {
   activities      TournamentActivityFeed[]
   tickets         TournamentSupportTicket[]
   invitations     TournamentInvitation[]
+  announcements   TournamentAnnouncement[]
+  organizerRatings TournamentOrganizerRating[]
   @@index([status])
   @@index([game])
   @@index([startDate])
 }
 
 model TournamentTeam {
-  id                  String     @id @default(uuid())
+  id                  String             @id @default(uuid())
   seed                Int?
   placement           Int?
-  readinessScore      Int        @default(0)
-  checkedIn           Boolean    @default(false)
-  checkedInAt         DateTime?
-  registrationStatus  String     @default("ACCEPTED") // PENDING_REVIEW | ACTION_REQUIRED | ACCEPTED | REJECTED | WAITLISTED | WITHDRAWN
+  readinessScore      Int                @default(0)
+  checkedIn           Boolean            @default(false)
+  registrationStatus  String             @default("ACCEPTED") // PENDING_REVIEW | ACTION_REQUIRED | ACCEPTED | REJECTED | WAITLISTED | WITHDRAWN
   actionRequiredNotes String?
-  registeredAt        DateTime   @default(now())
+  status              RegistrationStatus @default(PENDING)
+  rejectionReason     String?
+  customResponses     Json?
+  checkInStatus       CheckInStatus      @default(NOT_CHECKED_IN)
+  checkedInAt         DateTime?
+  registeredAt        DateTime           @default(now())
   tournamentId        String
-  tournament          Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tournament          Tournament         @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   teamId              String
-  team                Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team                Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   members             TournamentTeamMember[]
-  matchesAsTeam1      Match[]    @relation("Team1")
-  matchesAsTeam2      Match[]    @relation("Team2")
+  matchesAsTeam1      Match[]            @relation("Team1")
+  matchesAsTeam2      Match[]            @relation("Team2")
   activities          TournamentActivityFeed[]
   @@unique([tournamentId, teamId])
+  @@index([status])
+  @@index([checkInStatus])
 }
 
 model TournamentInvitation {
@@ -748,6 +763,7 @@ model TournamentTeamMember {
   tournamentTeam    TournamentTeam     @relation(fields: [tournamentTeamId], references: [id], onDelete: Cascade)
   userId            String
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isSubstitute      Boolean            @default(false)
   @@unique([tournamentTeamId, userId])
 }
 
@@ -762,27 +778,32 @@ model TournamentParticipant {
 }
 
 model Match {
-  id            String      @id @default(uuid())
-  round         Int
-  matchIndex    Int
-  status        MatchStatus @default(SCHEDULED)
-  scheduledAt   DateTime?
-  completedAt   DateTime?
-  winnerId      String?
-  scoreTeam1    Int?
-  scoreTeam2    Int?
-  team1CheckedIn Boolean    @default(false)
-  team2CheckedIn Boolean    @default(false)
-  mapVetoState  Json?
-  bracket       Json?
-  tournamentId  String
-  tournament    Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  team1Id       String?
-  team1         TournamentTeam? @relation("Team1", fields: [team1Id], references: [id])
-  team2Id       String?
-  team2         TournamentTeam? @relation("Team2", fields: [team2Id], references: [id])
-  disputes      MatchDispute[]
-  activities    TournamentActivityFeed[]
+  id                String          @id @default(uuid())
+  round             Int
+  matchIndex        Int
+  status            MatchStatus     @default(SCHEDULED)
+  scheduledAt       DateTime?
+  completedAt       DateTime?
+  winnerId          String?
+  scoreTeam1        Int?
+  scoreTeam2        Int?
+  team1CheckedIn    Boolean         @default(false)
+  team2CheckedIn    Boolean         @default(false)
+  mapVetoState      Json?
+  roomId            String?
+  roomPassword      String?
+  instructions      String?
+  evidenceUrl       String?
+  submittedByUserId String?
+  bracket           Json?
+  tournamentId      String
+  tournament        Tournament      @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  team1Id           String?
+  team1             TournamentTeam? @relation("Team1", fields: [team1Id], references: [id])
+  team2Id           String?
+  team2             TournamentTeam? @relation("Team2", fields: [team2Id], references: [id])
+  disputes          MatchDispute[]
+  activities        TournamentActivityFeed[]
   @@index([tournamentId])
 }
 
@@ -841,6 +862,31 @@ model TicketMessage {
   createdAt     DateTime                @default(now())
 
   @@index([ticketId])
+}
+
+model TournamentAnnouncement {
+  id           String     @id @default(uuid())
+  title        String
+  content      String
+  isPinned     Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  @@index([tournamentId])
+}
+
+model TournamentOrganizerRating {
+  id           String     @id @default(uuid())
+  rating       Int
+  feedback     String?
+  createdAt    DateTime   @default(now())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([tournamentId, userId])
+  @@index([tournamentId])
+  @@index([userId])
 }
 
 // ─── Match disputes (result verification / appeals) ────────────────────────
@@ -1242,6 +1288,17 @@ enum MatchStatus {
   CANCELLED
 }
 
+enum RegistrationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum CheckInStatus {
+  NOT_CHECKED_IN
+  CHECKED_IN
+}
+
 enum OrgMemberRole {
   OWNER
   ADMIN
@@ -1527,4 +1584,74 @@ model MontageProject {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+// ─── Free Fire MVP: Teammate Discovery & Trust ──────────────────────────────
+
+enum FreeFireTeammateRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+model FreeFireProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  freeFireUid         String?  // Self-reported UID
+  freeFireUsername    String?  // Self-reported IGN
+  preferredMode       String   @default("BR_SQUAD") // BR_SQUAD, CS_SQUAD, LONE_WOLF, DUO
+  rank                String   @default("HEROIC") // BRONZE, SILVER, GOLD, PLATINUM, DIAMOND, HEROIC, GRANDMASTER
+  playstyle           String   @default("BALANCED") // AGGRESSIVE, BALANCED, DEFENSIVE, SUPPORT, STRATEGIC
+  language            String   @default("ENGLISH")
+  micPreference       Boolean  @default(true)
+  availability        String   @default("EVENING") // NOW, TODAY, EVENING, WEEKENDS
+  teammatePreference  String?  // Description of desired partner
+  isVerified          Boolean  @default(false) // Always false for self-reported Free Fire stats per policy
+  reputationScore     Float    @default(5.0)
+  completedSessions   Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([userId])
+  @@index([rank])
+  @@index([playstyle])
+  @@index([availability])
+  @@index([reputationScore])
+}
+
+model FreeFireTeammateRequest {
+  id         String                        @id @default(uuid())
+  senderId   String
+  sender     User                          @relation("FreeFireRequestsSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User                          @relation("FreeFireRequestsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  status     FreeFireTeammateRequestStatus @default(PENDING)
+  message    String?
+  createdAt  DateTime                      @default(now())
+  updatedAt  DateTime                      @updatedAt
+
+  @@unique([senderId, receiverId, status])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model FreeFireSessionRating {
+  id           String   @id @default(uuid())
+  raterId      String
+  rater        User     @relation("FreeFireRatingsGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  ratedUserId  String
+  ratedUser    User     @relation("FreeFireRatingsReceived", fields: [ratedUserId], references: [id], onDelete: Cascade)
+  rating       Int      // 1 to 5 stars
+  feedback     String?
+  communicationRating Int? // 1 to 5 stars
+  reliabilityRating   Int? // 1 to 5 stars
+  createdAt    DateTime @default(now())
+
+  @@unique([raterId, ratedUserId])
+  @@index([raterId])
+  @@index([ratedUserId])
 }

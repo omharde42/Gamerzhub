@@ -1,8 +1,8 @@
-# 🎮 GAMERHUB
+# 🎮 GAMERZHUB
 
 > Connect. Compete. Level Up.
 
-GAMERHUB is an all-in-one social networking platform built exclusively for gamers. It combines networking, tournaments, recruitment, AI-powered recommendations, communities, messaging, analytics, and esports career opportunities into one modern ecosystem.
+GAMERZHUB is an all-in-one social networking platform built exclusively for gamers. It combines networking, tournaments, recruitment, AI-powered recommendations, communities, messaging, analytics, and esports career opportunities into one modern ecosystem.
 
 ---
 
@@ -135,9 +135,9 @@ Future Cloud:
 
 ---
 
-# 🎯 Why GAMERHUB?
+# 🎯 Why GAMERZHUB?
 
-Unlike Discord, Steam, Faceit, Tracker.gg, Battlefy, Guilded, and Challengermode, GAMERHUB combines everything gamers need into one platform.
+Unlike Discord, Steam, Faceit, Tracker.gg, Battlefy, Guilded, and Challengermode, GAMERZHUB combines everything gamers need into one platform.
 
 ✅ Social Networking
 
@@ -555,15 +555,16 @@ analytics_events
 
 ## 👨‍💻 Contributors
 
-- **Om Harde** (@omharde42) — Founder & CEO
+- **Om Harde** (@omharde42) — Founder And CEO of B2CSolution company
+- and Co-Founder of Gamerzhub
 - **Yash** (@YASH544847) — Founder of Gamerzhub
-- **Purvesh Bhadale** — Co-Founder & Collaborator
+- **Purvesh Bhadale** — Co-Founder B2CSolution Company & Collaborator of Gamerzhub
 
   ---
 
 ## 🤝 Contributing
 
-We appreciate every contribution to GamerHub.
+We appreciate every contribution to GamerzHub.
 
 ### Development Workflow
 

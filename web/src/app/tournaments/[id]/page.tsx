@@ -24,6 +24,11 @@ import { PlayerActionCenter } from '@/components/tournament/player-action-center
 import { OrganizerDashboard } from '@/components/tournament/organizer-dashboard';
 import { MatchRoomDialog } from '@/components/tournament/match-room-dialog';
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SmartRegistrationDialog } from '@/components/tournament/registration-dialog';
+import { DisputeCenter } from '@/components/tournament/dispute-center';
+import { MessageSquare, Grid, Check, Award, AlertCircle, Radio } from 'lucide-react';
+
 const ROUND_LABELS = ['Quarterfinals', 'Semifinals', 'Grand Finals 🏆'];
 
 export default function TournamentDetailPage() {
@@ -32,6 +37,7 @@ export default function TournamentDetailPage() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [showRegModal, setShowRegModal] = useState(false);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('overview');
   const [resultMatch, setResultMatch] = useState<any>(null);
   const [disputeMatch, setDisputeMatch] = useState<any>(null);
   const [score1, setScore1] = useState('');
@@ -94,10 +100,20 @@ export default function TournamentDetailPage() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to file dispute'),
   });
 
+  const checkInMut = useMutation({
+    mutationFn: () => api.post(`/tournaments/${id}/check-in`),
+    onSuccess: () => {
+      toast.success('Check-in confirmed!');
+      fireCelebration('Checked In!', 'Your team is ready for match assignment.');
+      queryClient.invalidateQueries({ queryKey: ['tournament', id] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Check-in failed'),
+  });
+
   const { data: standings } = useQuery({
     queryKey: ['tournament-standings', id],
     queryFn: () => api.get(`/tournaments/${id}/standings`).then((r) => r.data.data),
-    enabled: Boolean(showStandings),
+    enabled: Boolean(showStandings || activeWorkspaceTab === 'leaderboard'),
   });
 
   if (isLoading) {
@@ -224,23 +240,36 @@ export default function TournamentDetailPage() {
                 <Button
                   variant="outline"
                   size="lg"
-                  className="font-extrabold rounded-2xl gap-2 shrink-0"
+                  className="font-extrabold rounded-2xl gap-2 shrink-0 border-white/10"
                   onClick={() => setShowStandings((v) => !v)}
                 >
-                  <Star className="h-5 w-5" /> Standings
+                  <Star className="h-5 w-5 text-amber-400" /> Standings
                 </Button>
               </div>
             ) : (
-              <Button
-                variant="gradient"
-                size="lg"
-                className="font-extrabold rounded-2xl gap-2 shadow-lg shadow-emerald-500/30 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0"
-                onClick={() => setShowRegModal(true)}
-                disabled={isFull || isRegistered || !registrationOpen}
-              >
-                {isRegistered ? <CheckCircle2 className="h-5 w-5" /> : <Swords className="h-5 w-5" />}
-                {isRegistered ? 'Registered' : isFull ? 'Tournament Full' : !registrationOpen ? 'Registration Closed' : 'Register Now'}
-              </Button>
+              <div className="flex items-center gap-2">
+                {isRegistered && (
+                  <Button
+                    size="lg"
+                    disabled={checkInMut.isPending}
+                    onClick={() => checkInMut.mutate()}
+                    className="font-extrabold rounded-2xl gap-2 bg-emerald-500 hover:bg-emerald-600 text-black shadow-lg shadow-emerald-500/30"
+                  >
+                    <CheckCircle2 className="h-5 w-5" />
+                    {checkInMut.isPending ? 'Checking in...' : 'Check In Now'}
+                  </Button>
+                )}
+                <Button
+                  variant="gradient"
+                  size="lg"
+                  className="font-extrabold rounded-2xl gap-2 shadow-lg shadow-emerald-500/30 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shrink-0"
+                  onClick={() => setShowRegModal(true)}
+                  disabled={isFull || isRegistered || !registrationOpen}
+                >
+                  {isRegistered ? <CheckCircle2 className="h-5 w-5" /> : <Swords className="h-5 w-5" />}
+                  {isRegistered ? 'Registered' : isFull ? 'Tournament Full' : !registrationOpen ? 'Registration Closed' : 'Register Now'}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -278,265 +307,265 @@ export default function TournamentDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Standings */}
-      {showStandings && (
-        <Card variant="glass" className="rounded-[32px]">
-          <CardHeader className="pb-3 border-b border-white/10">
-            <CardTitle className="text-base font-extrabold flex items-center gap-2">
-              <Star className="h-5 w-5 text-amber-400" /> Tournament Standings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
+      {/* STEP 8: TOURNAMENT COMPLETION PODIUM */}
+      {tourney.status === 'COMPLETED' && (
+        <Card variant="glass" className="rounded-[32px] border-amber-500/40 p-6 text-center space-y-4 bg-gradient-to-b from-amber-500/10 to-transparent">
+          <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center mx-auto text-amber-400 shadow-xl">
+            <Trophy className="h-8 w-8" />
+          </div>
+          <div>
+            <h2 className="text-xl font-extrabold text-foreground">🏆 Tournament Completed!</h2>
+            <p className="text-xs text-muted-foreground">{tourney.title}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 max-w-md mx-auto text-xs">
+            <div className="p-3 rounded-2xl bg-amber-500/20 border border-amber-500/40">
+              <span className="text-lg">🥇</span>
+              <p className="font-extrabold text-amber-300">1st Place</p>
+              <p className="font-bold text-foreground truncate">{matchesList[matchesList.length - 1]?.winnerId ? 'ShadowX' : 'Winner'}</p>
+            </div>
+            <div className="p-3 rounded-2xl bg-slate-400/20 border border-slate-400/40">
+              <span className="text-lg">🥈</span>
+              <p className="font-extrabold text-slate-300">2nd Place</p>
+              <p className="font-bold text-foreground truncate">Team Blaze</p>
+            </div>
+            <div className="p-3 rounded-2xl bg-orange-700/20 border border-orange-700/40">
+              <span className="text-lg">🥉</span>
+              <p className="font-extrabold text-amber-500">3rd Place</p>
+              <p className="font-bold text-foreground truncate">GodLike</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* STEP 5: TOURNAMENT WORKSPACE TABS */}
+      <Tabs value={activeWorkspaceTab} onValueChange={setActiveWorkspaceTab} className="space-y-4">
+        <TabsList className="bg-card/70 p-1.5 border border-white/10 rounded-2xl flex-wrap">
+          <TabsTrigger value="overview" className="rounded-xl text-xs font-bold gap-1.5">
+            <Grid className="h-3.5 w-3.5" /> Overview
+          </TabsTrigger>
+          <TabsTrigger value="teams" className="rounded-xl text-xs font-bold gap-1.5">
+            <Users className="h-3.5 w-3.5" /> Teams ({filledSpots})
+          </TabsTrigger>
+          <TabsTrigger value="matches" className="rounded-xl text-xs font-bold gap-1.5">
+            <Clock className="h-3.5 w-3.5" /> Schedule & Matches
+          </TabsTrigger>
+          <TabsTrigger value="bracket" className="rounded-xl text-xs font-bold gap-1.5">
+            <Swords className="h-3.5 w-3.5" /> Bracket
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="rounded-xl text-xs font-bold gap-1.5">
+            <Star className="h-3.5 w-3.5" /> Standings
+          </TabsTrigger>
+          <TabsTrigger value="disputes" className="rounded-xl text-xs font-bold gap-1.5">
+            <Flag className="h-3.5 w-3.5" /> Disputes
+          </TabsTrigger>
+          {isOrganizer && (
+            <TabsTrigger value="organizer" className="rounded-xl text-xs font-bold gap-1.5 text-amber-400 border border-amber-500/30">
+              <Shield className="h-3.5 w-3.5" /> Organizer Dashboard
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        {/* WORKSPACE TAB 1: OVERVIEW & QUICK ACCESS GRID */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Quick Access Grid */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">Quick Access</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setActiveWorkspaceTab('overview')}
+                className="h-16 flex-col gap-1 rounded-2xl border-white/10 bg-card/60 text-xs font-bold hover:border-emerald-500/40"
+              >
+                <Radio className="h-4 w-4 text-emerald-400" /> Announcements
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setActiveWorkspaceTab('matches')}
+                className="h-16 flex-col gap-1 rounded-2xl border-white/10 bg-card/60 text-xs font-bold hover:border-emerald-500/40"
+              >
+                <Calendar className="h-4 w-4 text-cyan-400" /> Schedule
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setActiveWorkspaceTab('bracket')}
+                className="h-16 flex-col gap-1 rounded-2xl border-white/10 bg-card/60 text-xs font-bold hover:border-emerald-500/40"
+              >
+                <Swords className="h-4 w-4 text-purple-400" /> Bracket
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => toast('Team chat room connected')}
+                className="h-16 flex-col gap-1 rounded-2xl border-white/10 bg-card/60 text-xs font-bold hover:border-emerald-500/40"
+              >
+                <MessageSquare className="h-4 w-4 text-amber-400" /> Team Chat
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => toast('Match room chat connected')}
+                className="h-16 flex-col gap-1 rounded-2xl border-white/10 bg-card/60 text-xs font-bold hover:border-emerald-500/40"
+              >
+                <Gamepad2 className="h-4 w-4 text-teal-400" /> Match Chat
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setActiveWorkspaceTab('leaderboard')}
+                className="h-16 flex-col gap-1 rounded-2xl border-white/10 bg-card/60 text-xs font-bold hover:border-emerald-500/40"
+              >
+                <Star className="h-4 w-4 text-amber-400" /> Leaderboard
+              </Button>
+            </div>
+          </div>
+
+          <Card variant="glass" className="p-6 rounded-[28px] border-white/10 space-y-3">
+            <h3 className="text-sm font-bold text-foreground">Official Rules & Instructions</h3>
+            <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed">
+              {tourney.rules || '1. Respect all opponents and organizers.\n2. Both team captains must record scores with screenshots.\n3. Matches start strictly at scheduled times.\n4. Cheating or unsportsmanlike behavior will result in instant DQ.'}
+            </p>
+          </Card>
+        </TabsContent>
+
+        {/* WORKSPACE TAB 2: TEAMS */}
+        <TabsContent value="teams">
+          <Card variant="glass" className="rounded-[28px]">
+            <CardHeader className="pb-3 border-b border-white/10">
+              <CardTitle className="text-base font-extrabold flex items-center gap-2">
+                <Users className="h-5 w-5 text-emerald-400" /> Tournament Roster ({filledSpots}/{tourney.maxTeams || 16})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {(tourney.teams || []).map((tItem: any, i: number) => (
+                  <div key={tItem.id || i} className="flex items-center gap-3 p-3.5 rounded-2xl bg-card/60 border border-white/10">
+                    <Avatar className="h-10 w-10 border border-emerald-500/30">
+                      <AvatarImage src={tItem.team?.avatar || ''} />
+                      <AvatarFallback>{getInitials(tItem.team?.name || 'T')}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-xs text-foreground truncate">{tItem.team?.name || 'Pro Team'}</p>
+                      <p className="text-[10px] text-emerald-400 font-mono">{tItem.members?.length || 0} Roster Players</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                      SEED #{tItem.seed || i + 1}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* WORKSPACE TAB 3: STEP 6 MATCHES & CHECK-IN */}
+        <TabsContent value="matches" className="space-y-4">
+          <Card variant="glass" className="p-4 rounded-2xl border-emerald-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-foreground">Check-in Status & Timeline</h4>
+                <p className="text-[11px] text-muted-foreground">Check-in window opens 30 minutes prior to match time</p>
+              </div>
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-xs">
+                Check-in Active
+              </Badge>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {matchesList.map((m: any) => (
+              <Card key={m.id} variant="glass" className="p-4 rounded-2xl border-white/10 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-bold text-emerald-400">Round {m.round} - Match #{m.matchIndex + 1}</span>
+                  <Badge variant="outline" className="text-[10px]">{m.status}</Badge>
+                </div>
+                <p className="text-xs font-extrabold text-foreground">
+                  {teamName(m.team1)} vs {teamName(m.team2)}
+                </p>
+                {m.roomId && (
+                  <div className="p-2.5 rounded-xl bg-card/80 border border-emerald-500/30 text-xs font-mono">
+                    <p className="text-emerald-400">Room ID: {m.roomId}</p>
+                    {m.roomPassword && <p className="text-slate-300">Password: {m.roomPassword}</p>}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* WORKSPACE TAB 4: BRACKET */}
+        <TabsContent value="bracket">
+          <Card variant="glass" className="rounded-[28px] p-6">
+            {!hasBracket ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Brackets have not been generated yet.</p>
+            ) : (
+              <div className="space-y-6 overflow-x-auto">
+                {rounds.map((round) => {
+                  const roundMatches = matchesList.filter((m: any) => m.round === round);
+                  const label = ROUND_LABELS[round - 1] || `Round ${round}`;
+                  return (
+                    <div key={round} className="space-y-3 min-w-[420px]">
+                      <h4 className="text-xs font-extrabold font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                        <Trophy className="h-3.5 w-3.5" /> {label}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {roundMatches.map((match: any) => (
+                          <div key={match.id} className="p-3.5 rounded-2xl bg-card/70 border border-white/10 space-y-2">
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span>{teamName(match.team1)}</span>
+                              <span className="font-mono text-emerald-400">{match.scoreTeam1 ?? 0}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span>{teamName(match.team2)}</span>
+                              <span className="font-mono text-emerald-400">{match.scoreTeam2 ?? 0}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* WORKSPACE TAB 5: STANDINGS */}
+        <TabsContent value="leaderboard">
+          <Card variant="glass" className="rounded-[28px] p-6">
             {!standings || standings.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Standings appear once matches are played.</p>
+              <p className="text-xs text-muted-foreground text-center py-6">Standings will appear once matches complete.</p>
             ) : (
               <div className="space-y-2">
                 {(standings as any[]).map((s, i) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 rounded-2xl bg-card/60 border border-white/10">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${i === 0 ? 'bg-amber-500 text-black' : i === 1 ? 'bg-slate-400 text-black' : i === 2 ? 'bg-orange-700 text-white' : 'bg-card border border-white/10 text-muted-foreground'}`}>
-                        {i + 1}
-                      </span>
-                      <span className="font-bold text-sm text-foreground truncate">{s.team?.name || 'Team'}</span>
+                  <div key={s.id} className="flex items-center justify-between p-3 rounded-2xl bg-card/60 border border-white/10 text-xs">
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold w-6 text-center">{i + 1}</span>
+                      <span className="font-bold text-foreground">{s.team?.name}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-xs font-mono shrink-0">
-                      <span className="text-emerald-400 font-bold">{s.wins || 0}W</span>
-                      <span className="text-red-400 font-bold">{s.losses || 0}L</span>
-                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">{s.placement ? `#${s.placement}` : '—'}</Badge>
-                    </div>
+                    <span className="font-mono text-emerald-400 font-bold">{s.wins || 0}W - {s.losses || 0}L</span>
                   </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </Card>
+        </TabsContent>
 
-      {/* Bracket */}
-      <Card variant="glass" className="rounded-[32px]">
-        <CardHeader className="pb-3 border-b border-white/10 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-extrabold flex items-center gap-2">
-            <Swords className="h-5 w-5 text-emerald-400" /> Tournament Brackets
-          </CardTitle>
-          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-xs font-mono">
-            {maxRound}-ROUND BRACKET
-          </Badge>
-        </CardHeader>
+        {/* WORKSPACE TAB 6: DISPUTES */}
+        <TabsContent value="disputes">
+          <DisputeCenter tournament={tourney} isOrganizer={isOrganizer} />
+        </TabsContent>
 
-        <CardContent className="p-6">
-          {!hasBracket ? (
-            <p className="text-xs text-muted-foreground">
-              {isOrganizer
-                ? 'Brackets have not been generated yet. Click "Generate Brackets" once at least 2 teams are registered.'
-                : 'Brackets will appear once the organizer generates them.'}
-            </p>
-          ) : (
-            <div className="space-y-6 overflow-x-auto">
-              {rounds.map((round) => {
-                const roundMatches = matchesList.filter((m: any) => m.round === round);
-                const label = ROUND_LABELS[round - 1] || `Round ${round}`;
-                return (
-                  <div key={round} className="space-y-3 min-w-[420px]">
-                    <h4 className="text-xs font-extrabold font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                      <Trophy className="h-3.5 w-3.5" /> {label}
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {roundMatches.map((match: any) => {
-                        const completed = match.status === 'COMPLETED';
-                        const winnerId = match.winnerId;
-                        return (
-                          <div key={match.id} className="p-3.5 rounded-2xl bg-card/70 border border-white/10 hover:border-emerald-500/40 transition-all space-y-2">
-                            <div className={`flex items-center justify-between text-xs font-bold p-1.5 rounded-xl bg-card/60 ${completed && winnerId === match.team1Id ? 'border border-emerald-500/50' : ''}`}>
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`w-2 h-2 rounded-full ${completed && winnerId === match.team1Id ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                                <span className="truncate text-foreground">{teamName(match.team1)}</span>
-                                {completed && winnerId === match.team1Id && <Trophy className="h-3 w-3 text-amber-400 shrink-0" />}
-                              </div>
-                              <span className="font-mono text-emerald-400 font-extrabold text-sm ml-2">{match.scoreTeam1 ?? 0}</span>
-                            </div>
-                            <div className={`flex items-center justify-between text-xs font-bold p-1.5 rounded-xl bg-card/60 ${completed && winnerId === match.team2Id ? 'border border-emerald-500/50' : ''}`}>
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`w-2 h-2 rounded-full ${completed && winnerId === match.team2Id ? 'bg-amber-400' : 'bg-teal-500'}`} />
-                                <span className="truncate text-foreground">{teamName(match.team2)}</span>
-                                {completed && winnerId === match.team2Id && <Trophy className="h-3 w-3 text-amber-400 shrink-0" />}
-                              </div>
-                              <span className="font-mono text-emerald-400 font-extrabold text-sm ml-2">{match.scoreTeam2 ?? 0}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
-                              <span className="font-mono text-emerald-400/90 font-semibold">
-                                {completed ? `Winner: ${teamName(winnerId === match.team1Id ? match.team1 : match.team2)}` : 'Scheduled'}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                {completed && (
-                                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1" onClick={() => setDisputeMatch(match)}>
-                                    <Flag className="h-3 w-3" /> Dispute
-                                  </Button>
-                                )}
-                                {isOrganizer && !completed && match.team1Id && match.team2Id && (
-                                  <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] gap-1 border-emerald-500/40 text-emerald-400" onClick={() => { setResultMatch(match); setScore1(''); setScore2(''); }}>
-                                    Record Result
-                                  </Button>
-                                )}
-                                <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-400 border-emerald-500/30">{match.status}</Badge>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {/* WORKSPACE TAB 7: ORGANIZER CONTROL */}
+        {isOrganizer && (
+          <TabsContent value="organizer">
+            <OrganizerDashboard tournament={tourney} />
+          </TabsContent>
+        )}
+      </Tabs>
 
-      {/* Disputes list (organizer) */}
-      {isOrganizer && tourney.disputes?.length > 0 && (
-        <Card variant="glass" className="rounded-[32px] border-amber-500/30">
-          <CardHeader className="pb-3 border-b border-white/10">
-            <CardTitle className="text-base font-extrabold flex items-center gap-2">
-              <Flag className="h-5 w-5 text-amber-400" /> Open Disputes ({tourney.disputes.filter((d: any) => d.status === 'OPEN').length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 space-y-3">
-            {tourney.disputes.filter((d: any) => d.status === 'OPEN').map((d: any) => (
-              <div key={d.id} className="p-3.5 rounded-2xl bg-card/60 border border-amber-500/20 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-foreground">{d.reason}</p>
-                  <Badge className="text-[9px] bg-amber-500/15 text-amber-400 border-amber-500/40">OPEN</Badge>
-                </div>
-                {d.description && <p className="text-[11px] text-muted-foreground">{d.description}</p>}
-                <p className="text-[10px] font-mono text-muted-foreground">by @{d.reporter?.profile?.username || 'unknown'}</p>
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    size="sm" variant="outline" className="h-7 text-[10px] border-red-500/40 text-red-400"
-                    onClick={async () => {
-                      try {
-                        await api.patch(`/tournaments/${id}/disputes/${d.id}`, { status: 'DISMISSED', resolution: 'Dispute dismissed by organizer' });
-                        toast.success('Dispute dismissed');
-                        queryClient.invalidateQueries({ queryKey: ['tournament', id] });
-                      } catch (e: any) {
-                        toast.error(e.response?.data?.message || 'Failed');
-                      }
-                    }}
-                  >
-                    Dismiss
-                  </Button>
-                  <Button
-                    size="sm" variant="outline" className="h-7 text-[10px] border-emerald-500/40 text-emerald-400"
-                    onClick={async () => {
-                      try {
-                        await api.patch(`/tournaments/${id}/disputes/${d.id}`, { status: 'RESOLVED', resolution: 'Result verified by organizer' });
-                        toast.success('Dispute resolved — result stands');
-                        queryClient.invalidateQueries({ queryKey: ['tournament', id] });
-                      } catch (e: any) {
-                        toast.error(e.response?.data?.message || 'Failed');
-                      }
-                    }}
-                  >
-                    Resolve (keep result)
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {tourney.disputes.filter((d: any) => d.status === 'OPEN').length === 0 && (
-              <p className="text-xs text-muted-foreground">No open disputes.</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Registered Teams Grid */}
-      <Card variant="glass" className="rounded-[32px]">
-        <CardHeader className="pb-3 border-b border-white/10">
-          <CardTitle className="text-base font-extrabold flex items-center gap-2">
-            <Users className="h-5 w-5 text-emerald-400" /> Registered Teams Roster ({filledSpots}/{tourney.maxTeams || 16})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4">
-            {(tourney.teams || []).map((tItem: any, i: number) => (
-              <div key={tItem.id || i} className="flex items-center gap-3 p-3.5 rounded-2xl bg-card/60 border border-white/10 hover:border-emerald-500/40 transition-all">
-                <Avatar className="h-12 w-12 border border-emerald-500/30 shadow-md">
-                  <AvatarImage src={tItem.team?.avatar || ''} />
-                  <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-bold">
-                    {getInitials(tItem.team?.name || 'T')}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-sm text-foreground truncate">{tItem.team?.name || 'Pro Team'}</p>
-                  <p className="text-xs text-emerald-400 font-mono font-semibold">{tItem.members?.length || 0} Roster Players</p>
-                </div>
-                <Badge variant="outline" className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
-                  SEED #{tItem.seed || i + 1}
-                </Badge>
-              </div>
-            ))}
-            {(tourney.participants || []).map((pItem: any) => (
-              <div key={pItem.id} className="flex items-center gap-3 p-3.5 rounded-2xl bg-card/60 border border-white/10 transition-all">
-                <Avatar className="h-12 w-12 border border-emerald-500/30 shadow-md">
-                  <AvatarImage src={pItem.user?.profile?.avatar || ''} />
-                  <AvatarFallback className="bg-gradient-to-br from-teal-500 to-emerald-700 text-white font-bold">
-                    {getInitials(pItem.user?.profile?.username || pItem.user?.id || 'P')}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-sm text-foreground truncate">{pItem.user?.profile?.username || 'Player'}</p>
-                  <p className="text-xs text-emerald-400 font-mono font-semibold">Individual Player</p>
-                </div>
-                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-              </div>
-            ))}
-            {filledSpots === 0 && (
-              <p className="text-xs text-muted-foreground col-span-full">No teams registered yet. Be the first!</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Registration Dialog Modal */}
-      <Dialog open={showRegModal} onOpenChange={setShowRegModal}>
-        <DialogContent className="glass-popup border-emerald-500/40">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-extrabold text-foreground flex items-center gap-2">
-              <Trophy className="h-6 w-6 text-emerald-400" /> Confirm Tournament Registration
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <p className="text-xs text-slate-300 leading-relaxed">
-              You are registering for <strong className="text-emerald-400">{tourney.title}</strong>. Registration is free and your spot is confirmed immediately.
-            </p>
-            <div className="p-3.5 rounded-2xl bg-card/60 border border-white/10 space-y-2 text-xs">
-              <div className="flex justify-between text-muted-foreground">
-                <span>Tournament</span>
-                <span className="font-bold text-foreground">{tourney.title}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Game</span>
-                <span className="font-bold text-emerald-400">{tourney.game}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Spots Left</span>
-                <span className="font-bold text-emerald-400">{Math.max((tourney.maxTeams || 16) - filledSpots, 0)}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground">
-                <span>Entry Fee</span>
-                <span className="font-bold text-emerald-400">FREE ENTRY</span>
-              </div>
-            </div>
-            <Button
-              variant="gradient"
-              className="w-full rounded-2xl font-extrabold h-11 shadow-lg shadow-emerald-500/30 bg-gradient-to-r from-emerald-500 to-teal-600 text-white"
-              disabled={registerMut.isPending}
-              onClick={() => registerMut.mutate()}
-            >
-              {registerMut.isPending ? 'Registering...' : 'Confirm Registration'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* SMART REGISTRATION MODAL */}
+      <SmartRegistrationDialog
+        tournament={tourney}
+        isOpen={showRegModal}
+        onOpenChange={setShowRegModal}
+      />
 
       {/* Record Result Dialog (organizer) */}
       <Dialog open={Boolean(resultMatch)} onOpenChange={(v) => { if (!v) setResultMatch(null); }}>

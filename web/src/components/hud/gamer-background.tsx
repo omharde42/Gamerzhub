@@ -1,5 +1,5 @@
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 
 const PARTICLES = 26;
 
@@ -14,26 +14,30 @@ interface GamerBackgroundProps {
  * it automatically.
  */
 export function GamerBackground({ dense = false }: GamerBackgroundProps) {
-  const particles = useMemo(
-    () => {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640;
-      const count = isMobile ? 8 : (dense ? 38 : PARTICLES);
-      return Array.from({ length: count }, (_, i) => ({
-        left: Math.random() * 100,
-        size: Math.random() * 3 + 1.5,
-        duration: Math.random() * 14 + 10,
-        delay: -Math.random() * 20,
-        drift: (Math.random() - 0.5) * 40,
-        color:
-          i % 3 === 0
-            ? 'rgba(16,185,129,0.75)'
-            : i % 3 === 1
-              ? 'rgba(139,92,246,0.7)'
-              : 'rgba(236,72,153,0.6)',
-      }));
-    },
-    [dense],
-  );
+  const [particleCount, setParticleCount] = useState(6);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth <= 640;
+      setParticleCount(isMobile ? 6 : dense ? 18 : 12);
+    }
+  }, [dense]);
+
+  const particles = useMemo(() => {
+    return Array.from({ length: particleCount }, (_, i) => ({
+      left: (i * 100) / particleCount + (i % 2 === 0 ? 3 : -3),
+      size: (i % 3) + 1.5,
+      duration: (i % 4) * 3 + 12,
+      delay: -(i * 1.5),
+      drift: (i % 2 === 0 ? 1 : -1) * 20,
+      color:
+        i % 3 === 0
+          ? 'rgba(16,185,129,0.75)'
+          : i % 3 === 1
+            ? 'rgba(139,92,246,0.7)'
+            : 'rgba(236,72,153,0.6)',
+    }));
+  }, [particleCount]);
 
   return (
     <div aria-hidden className="fixed inset-0 z-0 overflow-hidden pointer-events-none">

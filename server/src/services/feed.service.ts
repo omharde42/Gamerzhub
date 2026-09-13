@@ -102,7 +102,7 @@ export class FeedService {
       this.ensureOfficialWelcomePostExists().catch(() => {});
     }
 
-    let whereClause: any = { isPublished: true };
+    const whereClause: any = { isPublished: true };
     if (userId) {
       const following = await prisma.follow.findMany({
         where: { followerId: userId },

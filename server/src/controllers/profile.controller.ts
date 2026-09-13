@@ -6,6 +6,7 @@ import { AuthRequest } from '../types';
 import cloudinary from '../config/cloudinary';
 import { config } from '../config';
 import { aiService } from '../services/ai.service';
+import { appwriteService } from '../services/appwrite.service';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess, sendError } from '../utils/response';
 import { NotFoundError, ValidationError } from '../utils/errors';
@@ -16,6 +17,7 @@ import { sanitizeProfileUpdate } from '../utils/profile-allowlist';
 export class ProfileController {
   getProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { username } = req.params;
+
     const profile = await prisma.profile.findUnique({
       where: { username },
       include: {
@@ -39,6 +41,25 @@ export class ProfileController {
       },
     });
     if (!profile) throw new NotFoundError('Profile');
+
+    // Background write-through sync to Appwrite read model
+    appwriteService.syncPublicProfile({
+      userId: profile.userId,
+      username: profile.username,
+      displayName: profile.displayName,
+      avatar: profile.avatar,
+      banner: profile.banner,
+      bio: profile.bio,
+      country: profile.country,
+      rank: profile.rank,
+      winRate: profile.winRate,
+      kd: profile.kd,
+      totalMatches: profile.totalMatches,
+      gamerScore: profile.gamerScore,
+      verified: profile.verified,
+      languages: profile.languages,
+      updatedAt: profile.updatedAt.toISOString(),
+    }).catch(err => console.warn('[Appwrite] Profile sync warning:', err?.message));
 
     const viewerId = req.user?.userId ?? undefined;
 
@@ -106,15 +127,57 @@ export class ProfileController {
   });
 
   /**
+   * GET /api/profiles/public/:userId
+   * Fast read-model endpoint backed by Appwrite with Prisma fallback.
+   */
+  getPublicProfileById = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { userId } = req.params;
+
+    // 1. Appwrite High-Read Model Attempt
+    const cachedProfile = await appwriteService.getPublicProfile(userId);
+    if (cachedProfile) {
+      return sendSuccess(res, cachedProfile, 'Public gamer profile fetched via Appwrite read model');
+    }
+
+    // 2. Fallback to Primary PostgreSQL/Supabase DB
+    const profile = await prisma.profile.findUnique({
+      where: { userId },
+      select: {
+        userId: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        banner: true,
+        bio: true,
+        country: true,
+        rank: true,
+        winRate: true,
+        kd: true,
+        totalMatches: true,
+        gamerScore: true,
+        verified: true,
+        languages: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!profile) throw new NotFoundError('Gamer Profile');
+
+    const profileData = {
+      ...profile,
+      updatedAt: profile.updatedAt.toISOString(),
+    };
+
+    // Asynchronously update Appwrite cache for next request
+    appwriteService.syncPublicProfile(profileData).catch(err =>
+      console.warn('[Appwrite] Lazy cache populate warning:', err?.message)
+    );
+
+    sendSuccess(res, profileData, 'Public gamer profile fetched via PostgreSQL fallback');
+  });
+
+  /**
    * PUT /api/profiles
-   *
-   * Strict allowlist — a user may only update their own editable profile
-   * fields. Server-owned fields (gamerScore, skillScore, competitiveScore,
-   * communicationScore, leadershipScore, teamworkScore, improvementRate,
-   * winRate, kd, accuracy, totalMatches, wins, losses, rankScore, rank,
-   * verified, toxicityScore, and any game-verification/statistics fields) are
-   * rejected with a validation error — clients can never write them, even by
-   * accident or direct API call.
    */
   updateProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
     const body = req.body || {};
@@ -124,6 +187,26 @@ export class ProfileController {
       where: { userId: req.user!.userId },
       data,
     });
+
+    // Write-Through Sync to Appwrite Read Model
+    appwriteService.syncPublicProfile({
+      userId: profile.userId,
+      username: profile.username,
+      displayName: profile.displayName,
+      avatar: profile.avatar,
+      banner: profile.banner,
+      bio: profile.bio,
+      country: profile.country,
+      rank: profile.rank,
+      winRate: profile.winRate,
+      kd: profile.kd,
+      totalMatches: profile.totalMatches,
+      gamerScore: profile.gamerScore,
+      verified: profile.verified,
+      languages: profile.languages,
+      updatedAt: profile.updatedAt.toISOString(),
+    }).catch(err => console.warn('[Appwrite] Profile sync error on update:', err?.message));
+
     sendSuccess(res, profile, 'Profile updated successfully');
   });
 
@@ -154,6 +237,24 @@ export class ProfileController {
       data: { avatar: avatarUrl },
     });
 
+    appwriteService.syncPublicProfile({
+      userId: profile.userId,
+      username: profile.username,
+      displayName: profile.displayName,
+      avatar: profile.avatar,
+      banner: profile.banner,
+      bio: profile.bio,
+      country: profile.country,
+      rank: profile.rank,
+      winRate: profile.winRate,
+      kd: profile.kd,
+      totalMatches: profile.totalMatches,
+      gamerScore: profile.gamerScore,
+      verified: profile.verified,
+      languages: profile.languages,
+      updatedAt: profile.updatedAt.toISOString(),
+    }).catch(err => console.warn('[Appwrite] Profile sync error on avatar upload:', err?.message));
+
     sendSuccess(res, { avatar: avatarUrl, profile }, 'Avatar updated successfully');
   });
 
@@ -183,6 +284,24 @@ export class ProfileController {
       where: { userId: req.user!.userId },
       data: { banner: bannerUrl },
     });
+
+    appwriteService.syncPublicProfile({
+      userId: profile.userId,
+      username: profile.username,
+      displayName: profile.displayName,
+      avatar: profile.avatar,
+      banner: profile.banner,
+      bio: profile.bio,
+      country: profile.country,
+      rank: profile.rank,
+      winRate: profile.winRate,
+      kd: profile.kd,
+      totalMatches: profile.totalMatches,
+      gamerScore: profile.gamerScore,
+      verified: profile.verified,
+      languages: profile.languages,
+      updatedAt: profile.updatedAt.toISOString(),
+    }).catch(err => console.warn('[Appwrite] Profile sync error on banner upload:', err?.message));
 
     sendSuccess(res, { banner: bannerUrl, profile }, 'Banner updated successfully');
   });
@@ -219,7 +338,18 @@ export class ProfileController {
       prisma.profile.findMany({
         where,
         skip,
-        take: parseInt(limit as string),
+        take: Math.min(parseInt(limit as string) || 20, 50), // Enforce upper bound pagination limit
+        select: {
+          id: true,
+          userId: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          rank: true,
+          gamerScore: true,
+          verified: true,
+          winRate: true,
+        },
         orderBy: { winRate: 'desc' },
       }),
       prisma.profile.count({ where }),

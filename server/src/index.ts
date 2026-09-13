@@ -43,6 +43,7 @@ import cryptoRoutes from './routes/crypto.routes';
 import steamRoutes from './routes/steam.routes';
 import gameStatsRoutes from './routes/game-stats.routes';
 import clashOfClansRoutes from './routes/clashofclans.routes';
+import freeFireRoutes from './routes/freefire.routes';
 import challengeRoutes from './routes/challenge.routes';
 import videoRoutes from './routes/video.routes';
 import { setSocketIo } from './socket-emitter';
@@ -218,6 +219,7 @@ app.use('/api/compare', compareRoutes);
 app.use('/api/game-sync', gameSyncRoutes);
 app.use('/api/game-stats', gameStatsRoutes);
 app.use('/api/game', gameModularRoutes);
+app.use('/api/freefire', freeFireRoutes);
 app.use('/api/challenges', challengeRoutes);
 app.use('/api/video', videoRoutes);
 

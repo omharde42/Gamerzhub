@@ -14,6 +14,7 @@ import { useTheme } from 'next-themes';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { BackHeader } from '@/components/common/back-header';
+import { RequireAuth } from '@/components/auth/require-auth';
 
 type SettingsSection = 'appearance' | 'notifications' | 'privacy' | 'accounts' | 'danger';
 
@@ -30,37 +31,39 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6">
-      <BackHeader title="Settings" />
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Sidebar */}
-        <nav className="md:w-56 shrink-0 space-y-1" aria-label="Settings navigation">
-          {sections.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveSection(s.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                activeSection === s.id
-                  ? 'bg-primary/10 text-primary border border-primary/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <s.icon className="h-4 w-4" />
-              {s.label}
-            </button>
-          ))}
-        </nav>
+    <RequireAuth>
+      <div className="max-w-4xl mx-auto p-4 space-y-6">
+        <BackHeader title="Settings" />
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Sidebar */}
+          <nav className="md:w-56 shrink-0 space-y-1" aria-label="Settings navigation">
+            {sections.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setActiveSection(s.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeSection === s.id
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <s.icon className="h-4 w-4" />
+                {s.label}
+              </button>
+            ))}
+          </nav>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {activeSection === 'appearance' && <AppearanceSettings theme={theme} setTheme={setTheme} />}
-          {activeSection === 'notifications' && <NotificationSettings />}
-          {activeSection === 'privacy' && <PrivacySettings />}
-          {activeSection === 'accounts' && <AccountSettings />}
-          {activeSection === 'danger' && <DangerZone />}
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            {activeSection === 'appearance' && <AppearanceSettings theme={theme} setTheme={setTheme} />}
+            {activeSection === 'notifications' && <NotificationSettings />}
+            {activeSection === 'privacy' && <PrivacySettings />}
+            {activeSection === 'accounts' && <AccountSettings />}
+            {activeSection === 'danger' && <DangerZone />}
+          </div>
         </div>
       </div>
-    </div>
+    </RequireAuth>
   );
 }
 

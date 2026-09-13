@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,14 @@ import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawRedirect = searchParams.get('redirect');
+  const redirectTarget = (rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'))
+    ? rawRedirect
+    : '/feed';
+
   const { user, isAuthenticated, login } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,8 +33,6 @@ export default function LoginPage() {
     return null;
   }
 
-  // Redirect to feed if already logged in
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) return;
@@ -37,7 +41,7 @@ export default function LoginPage() {
       const { data } = await api.post('/auth/login', { email: email.trim(), password });
       login(data.data.user, data.data.accessToken, data.data.refreshToken);
       toast.success(`Welcome back, ${data.data.user?.profile?.username || 'Gamer'}!`);
-      router.push('/feed');
+      router.push(redirectTarget);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.error || 'Invalid credentials';
       toast.error(msg);
@@ -49,8 +53,6 @@ export default function LoginPage() {
   const handleSocialLogin = async (provider: string) => {
     setSocialLoading(true);
     try {
-      // These are OAuth redirects to the external backend, not internal Next.js
-      // navigation — the browser must leave the app, so full navigation is required.
       if (provider === 'discord') {
         window.location.href = API_URL + '/auth/discord?action=login';
         return;
@@ -85,10 +87,11 @@ export default function LoginPage() {
       footer={
         <span>
           Don't have an account?{' '}
-          <Link href="/auth/register" className="text-primary hover:underline font-medium">Sign up</Link>
+          <Link href={rawRedirect ? `/auth/register?redirect=${encodeURIComponent(rawRedirect)}` : "/auth/register"} className="text-primary hover:underline font-medium">Sign up</Link>
         </span>
       }
-    >            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+    >
+      <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
         <motion.div className="space-y-2" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
           <Label htmlFor="email">Email</Label>
           <Input
@@ -152,5 +155,13 @@ export default function LoginPage() {
         loading={socialLoading}
       />
     </AuthFormWrapper>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

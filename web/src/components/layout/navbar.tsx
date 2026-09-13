@@ -158,7 +158,7 @@ export function Navbar({ hidden = false }: { hidden?: boolean }) {
         {/* Desktop Brand Logo */}
         <Link href="/dashboard" className="hidden md:flex items-center gap-2.5 shrink-0 group">
           <div className="w-9 h-9 rounded-xl overflow-hidden border border-primary/20 shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:border-primary/40 shrink-0">
-            <img src="/logo.jpg" alt="GamerZ Hub" className="w-full h-full object-cover" />
+            <img src="/logo.webp" alt="GamerZ Hub" className="w-full h-full object-cover" />
           </div>
           <span className="text-base font-extrabold hidden sm:block text-foreground group-hover:text-primary transition-colors tracking-tight">GamerZ Hub</span>
         </Link>

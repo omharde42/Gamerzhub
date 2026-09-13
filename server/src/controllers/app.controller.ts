@@ -4,6 +4,8 @@ import fs from 'fs';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess, sendError } from '../utils/response';
 import prisma from '../config/database';
+import { getAllCanonicalGames } from '../config/gamesRegistry';
+import { appwriteService } from '../services/appwrite.service';
 
 export class AppController {
   getVersion = asyncHandler(async (req: Request, res: Response) => {
@@ -47,8 +49,28 @@ export class AppController {
       activePlayers: usersCount > 0 ? `${usersCount}` : '1',
       teams: teamsCount > 0 ? `${teamsCount}` : '0',
       tournaments: tournamentsCount > 0 ? `${tournamentsCount}` : '0',
-      gamesSupported: gamesCount > 0 ? `${gamesCount}` : '10+',
+      gamesSupported: gamesCount > 0 ? `${gamesCount}` : '15',
     });
+  });
+
+  getGameRegistry = asyncHandler(async (req: Request, res: Response) => {
+    // 1. Appwrite Read Model Attempt
+    const cachedRegistry = await appwriteService.getGameRegistry();
+    if (cachedRegistry && Object.keys(cachedRegistry).length > 0) {
+      return sendSuccess(res, Object.values(cachedRegistry), 'Canonical game registry fetched via Appwrite read model');
+    }
+
+    // 2. Primary Source Fallback (Canonical Games Registry)
+    const games = getAllCanonicalGames();
+
+    // Asynchronously populate Appwrite cache
+    for (const game of games) {
+      appwriteService.syncGameRegistry(game.gameId, game).catch(err =>
+        console.warn(`[Appwrite] Sync warning for ${game.gameId}:`, err?.message)
+      );
+    }
+
+    sendSuccess(res, games, 'Canonical game registry fetched via local fallback');
   });
 }
 

@@ -67,3 +67,29 @@ export const payoutStageValidation = [
   body('payoutStage').isIn(['PENDING', 'DISTRIBUTING', 'COMPLETED']).withMessage('Payout stage must be PENDING, DISTRIBUTING, or COMPLETED'),
 ];
 
+export const teamRegistrationDecisionValidation = [
+  param('id').isUUID().withMessage('Valid tournament ID is required'),
+  param('teamId').isUUID().withMessage('Valid team ID is required'),
+  body('rejectionReason').optional({ values: 'falsy' }).isString().isLength({ max: 500 }).withMessage('Rejection reason must be under 500 characters'),
+];
+
+export const matchCredentialsValidation = [
+  param('id').isUUID().withMessage('Valid tournament ID is required'),
+  param('matchId').isUUID().withMessage('Valid match ID is required'),
+  body('roomId').isString().trim().notEmpty().withMessage('Room ID is required'),
+  body('roomPassword').optional({ values: 'falsy' }).isString().trim(),
+  body('instructions').optional({ values: 'falsy' }).isString().isLength({ max: 1000 }),
+];
+
+export const announcementValidation = [
+  param('id').isUUID().withMessage('Valid tournament ID is required'),
+  body('title').isString().trim().isLength({ min: 2, max: 150 }).withMessage('Title must be between 2 and 150 characters'),
+  body('content').isString().trim().isLength({ min: 5, max: 2000 }).withMessage('Content must be between 5 and 2000 characters'),
+  body('isPinned').optional().isBoolean(),
+];
+
+export const organizerRatingValidation = [
+  param('id').isUUID().withMessage('Valid tournament ID is required'),
+  body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
+  body('feedback').optional({ values: 'falsy' }).isString().isLength({ max: 1000 }),
+];

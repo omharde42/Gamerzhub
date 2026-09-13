@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,14 @@ import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawRedirect = searchParams.get('redirect');
+  const redirectTarget = (rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//'))
+    ? rawRedirect
+    : '/feed';
+
   const { user, isAuthenticated, login } = useAuthStore();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -51,7 +57,7 @@ export default function RegisterPage() {
       });
       login(data.data.user, data.data.accessToken, data.data.refreshToken);
       toast.success('Account created! Welcome to GamerHub.');
-      router.push('/feed');
+      router.push(redirectTarget);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.error || 'Registration failed';
       toast.error(msg);
@@ -63,8 +69,6 @@ export default function RegisterPage() {
   const handleSocialLogin = async (provider: string) => {
     setSocialLoading(true);
     try {
-      // These are OAuth redirects to the external backend, not internal Next.js
-      // navigation — the browser must leave the app, so full navigation is required.
       if (provider === 'discord') {
         window.location.href = API_URL + '/auth/discord?action=login';
         return;
@@ -103,7 +107,7 @@ export default function RegisterPage() {
       footer={
         <span>
           Already have an account?{' '}
-          <Link href="/auth/login" className="text-primary hover:underline font-medium">Sign in</Link>
+          <Link href={rawRedirect ? `/auth/login?redirect=${encodeURIComponent(rawRedirect)}` : "/auth/login"} className="text-primary hover:underline font-medium">Sign in</Link>
         </span>
       }
     >
@@ -220,5 +224,13 @@ export default function RegisterPage() {
         loading={socialLoading}
       />
     </AuthFormWrapper>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center min-h-[50vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+      <RegisterForm />
+    </Suspense>
   );
 }

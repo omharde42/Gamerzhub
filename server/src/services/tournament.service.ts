@@ -980,6 +980,181 @@ export class TournamentService {
       winnerId: winningTeamId,
     });
   }
+
+  // ─── Team Registration Approval Pipeline ───────────────────────────────────
+
+  async acceptTeamRegistration(tournamentId: string, teamId: string, userId: string) {
+    await this.assertOrganizer(tournamentId, userId);
+    const tournamentTeam = await prisma.tournamentTeam.findUnique({
+      where: { tournamentId_teamId: { tournamentId, teamId } },
+      include: { team: { include: { members: { select: { userId: true } } } } },
+    });
+    if (!tournamentTeam) throw new NotFoundError('Tournament registration request');
+    if (tournamentTeam.status === 'ACCEPTED') throw new ConflictError('Team is already accepted');
+
+    const updated = await prisma.tournamentTeam.update({
+      where: { id: tournamentTeam.id },
+      data: { status: 'ACCEPTED' },
+      include: { team: { select: { id: true, name: true, avatar: true } } },
+    });
+
+    // Automatically ensure team members are linked as TournamentTeamMembers
+    const existingMembers = await prisma.tournamentTeamMember.findMany({ where: { tournamentTeamId: tournamentTeam.id } });
+    if (existingMembers.length === 0 && tournamentTeam.team?.members) {
+      await prisma.tournamentTeamMember.createMany({
+        data: tournamentTeam.team.members.map((m) => ({ tournamentTeamId: tournamentTeam.id, userId: m.userId })),
+        skipDuplicates: true,
+      });
+    }
+
+    // Notify team captain & members
+    for (const member of tournamentTeam.team.members) {
+      await notificationService.create({
+        userId: member.userId,
+        type: NotificationType.TOURNAMENT,
+        title: 'Team Accepted!',
+        message: `${tournamentTeam.team.name} has been accepted into the tournament!`,
+        link: `/tournaments/${tournamentId}`,
+      }).catch(() => {});
+    }
+
+    this.broadcastUpdate({ id: tournamentId, organizerId: userId });
+    return updated;
+  }
+
+  async rejectTeamRegistration(tournamentId: string, teamId: string, userId: string, rejectionReason?: string) {
+    await this.assertOrganizer(tournamentId, userId);
+    const tournamentTeam = await prisma.tournamentTeam.findUnique({
+      where: { tournamentId_teamId: { tournamentId, teamId } },
+      include: { team: { select: { id: true, name: true, members: { select: { userId: true } } } } },
+    });
+    if (!tournamentTeam) throw new NotFoundError('Tournament registration request');
+
+    const updated = await prisma.tournamentTeam.update({
+      where: { id: tournamentTeam.id },
+      data: { status: 'REJECTED', rejectionReason: rejectionReason || 'Registration not accepted by organizer' },
+    });
+
+    if (tournamentTeam.team?.members?.[0]) {
+      await notificationService.create({
+        userId: tournamentTeam.team.members[0].userId,
+        type: NotificationType.TOURNAMENT,
+        title: 'Team Registration Update',
+        message: `Your registration for ${tournamentTeam.team.name} was not accepted: ${rejectionReason || 'Organizer decision'}`,
+        link: `/tournaments/${tournamentId}`,
+      }).catch(() => {});
+    }
+
+    this.broadcastUpdate({ id: tournamentId, organizerId: userId });
+    return updated;
+  }
+
+  // ─── Window-based Team Check-In System ─────────────────────────────────────
+
+  async processCheckIn(tournamentId: string, userId: string) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true, startDate: true, checkInWindowMinutes: true, organizerId: true },
+    });
+    if (!tournament) throw new NotFoundError('Tournament');
+
+    // Find the user's registered team in this tournament
+    const userTeam = await prisma.tournamentTeam.findFirst({
+      where: {
+        tournamentId,
+        status: 'ACCEPTED',
+        OR: [
+          { team: { members: { some: { userId } } } },
+          { members: { some: { userId } } },
+        ],
+      },
+    });
+
+    if (!userTeam) throw new ForbiddenError('You do not have an accepted team in this tournament');
+    if (userTeam.checkInStatus === 'CHECKED_IN') return userTeam;
+
+    const updated = await prisma.tournamentTeam.update({
+      where: { id: userTeam.id },
+      data: { checkInStatus: 'CHECKED_IN', checkedInAt: new Date() },
+    });
+
+    this.broadcastUpdate(tournament);
+    return updated;
+  }
+
+  // ─── Match Credentials & Instructions ─────────────────────────────────────
+
+  async setMatchCredentials(tournamentId: string, matchId: string, userId: string, data: { roomId: string; roomPassword?: string; instructions?: string }) {
+    await this.assertOrganizer(tournamentId, userId);
+    const match = await prisma.match.findUnique({ where: { id: matchId } });
+    if (!match || match.tournamentId !== tournamentId) throw new NotFoundError('Match');
+
+    const updated = await prisma.match.update({
+      where: { id: matchId },
+      data: { roomId: data.roomId, roomPassword: data.roomPassword, instructions: data.instructions },
+    });
+
+    this.broadcastUpdate({ id: tournamentId, organizerId: userId });
+    return updated;
+  }
+
+  // ─── Announcements & Broadcasts ───────────────────────────────────────────
+
+  async createAnnouncement(tournamentId: string, userId: string, data: { title: string; content: string; isPinned?: boolean }) {
+    await this.assertOrganizer(tournamentId, userId);
+    const announcement = await prisma.tournamentAnnouncement.create({
+      data: { tournamentId, title: data.title, content: data.content, isPinned: data.isPinned || false },
+    });
+
+    this.broadcastUpdate({ id: tournamentId, organizerId: userId });
+    return announcement;
+  }
+
+  async getAnnouncements(tournamentId: string) {
+    return prisma.tournamentAnnouncement.findMany({
+      where: { tournamentId },
+      orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  // ─── Organizer Reputation & Analytics ─────────────────────────────────────
+
+  async rateOrganizer(tournamentId: string, userId: string, data: { rating: number; feedback?: string }) {
+    const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { status: true } });
+    if (!tournament) throw new NotFoundError('Tournament');
+
+    return prisma.tournamentOrganizerRating.upsert({
+      where: { tournamentId_userId: { tournamentId, userId } },
+      create: { tournamentId, userId, rating: data.rating, feedback: data.feedback },
+      update: { rating: data.rating, feedback: data.feedback },
+    });
+  }
+
+  async getAnalytics(tournamentId: string, userId: string) {
+    await this.assertOrganizer(tournamentId, userId);
+    const [totalTeams, acceptedTeams, checkedInTeams, matches, disputes] = await Promise.all([
+      prisma.tournamentTeam.count({ where: { tournamentId } }),
+      prisma.tournamentTeam.count({ where: { tournamentId, status: 'ACCEPTED' } }),
+      prisma.tournamentTeam.count({ where: { tournamentId, checkInStatus: 'CHECKED_IN' } }),
+      prisma.match.findMany({ where: { tournamentId }, select: { status: true } }),
+      prisma.matchDispute.count({ where: { tournamentId } }),
+    ]);
+
+    const completedMatches = matches.filter((m) => m.status === 'COMPLETED').length;
+    const checkInRate = acceptedTeams > 0 ? Math.round((checkedInTeams / acceptedTeams) * 100) : 0;
+    const completionRate = matches.length > 0 ? Math.round((completedMatches / matches.length) * 100) : 0;
+
+    return {
+      totalTeams,
+      acceptedTeams,
+      checkedInTeams,
+      checkInRate,
+      totalMatches: matches.length,
+      completedMatches,
+      completionRate,
+      disputes,
+    };
+  }
 }
 export const tournamentService = new TournamentService();
 
