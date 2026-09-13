@@ -74,6 +74,56 @@ export class TournamentController {
     const dispute = await tournamentService.resolveDispute(req.params.id, req.params.disputeId, req.user!.userId, req.body);
     sendSuccess(res, dispute, 'Dispute resolved');
   });
+
+  getPlayerActionCenter = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await tournamentService.getPlayerActionCenter(req.user!.userId);
+    sendSuccess(res, data);
+  });
+
+  getOrganizerCommandCenter = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const data = await tournamentService.getOrganizerCommandCenter(req.params.id, req.user!.userId);
+    sendSuccess(res, data);
+  });
+
+  matchCheckIn = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { teamId } = req.body;
+    const result = await tournamentService.checkInMatch(req.params.matchId, teamId, req.user!.userId);
+    sendSuccess(res, result, 'Check-in successful');
+  });
+
+  getActivityFeed = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const feed = await tournamentService.getTournamentActivityFeed(req.params.id);
+    sendSuccess(res, feed);
+  });
+
+  addTicketMessage = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const message = await tournamentService.addTicketMessage(req.params.ticketId, req.user!.userId, req.body);
+    sendSuccess(res, message, undefined, 201);
+  });
+
+  getTicketMessages = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const messages = await tournamentService.getTicketMessages(req.params.ticketId);
+    sendSuccess(res, messages);
+  });
+
+  processMapVeto = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { teamId, action, mapName } = req.body;
+    const result = await tournamentService.processMapVeto(req.params.matchId, teamId, action, mapName, req.user!.userId);
+    sendSuccess(res, result, 'Map veto processed');
+  });
+
+  updatePayoutStage = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { payoutStage, payoutDetails } = req.body;
+    const result = await tournamentService.updatePayoutStage(req.params.id, req.user!.userId, payoutStage, payoutDetails);
+    sendSuccess(res, result, 'Payout stage updated');
+  });
+
+  forfeitNoShowTeam = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { forfeitTeamId } = req.body;
+    const result = await tournamentService.forfeitNoShowTeam(req.params.matchId, forfeitTeamId, req.user!.userId);
+    sendSuccess(res, result, 'Team forfeit recorded');
+  });
 }
 
 export const tournamentController = new TournamentController();
+

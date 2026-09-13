@@ -12,7 +12,7 @@ export default function Loading() {
           className="relative inline-block"
         >
           <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary/30 shadow-2xl shadow-primary/20 mx-auto">
-            <img src="/logo.jpg" alt="GamerZ Hub" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+            <img src="/logo.webp" alt="GamerZ Hub" className="w-full h-full object-cover" loading="eager" decoding="async" />
           </div>
           <div className="absolute inset-0 rounded-2xl border-2 border-primary/40 animate-ping opacity-25" />
         </motion.div>

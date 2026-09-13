@@ -19,9 +19,9 @@ export const viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'GamerZ Hub - The Ultimate AAA Gaming Ecosystem',
-  description: 'Connect, compete, and level up. The professional AAA network for gamers.',
-  keywords: 'gaming, esports, tournaments, teams, gaming community',
+  title: 'GamerZ Hub — Find Teammates. Build Better Squads.',
+  description: 'Discover suitable gaming teammates, find better gaming sessions, reconnect with good players, and build your squad with GamerZ Hub.',
+  keywords: 'gaming, esports, teammates, lfg, tournaments, squads, gamer profile',
   icons: {
     icon: '/logo.webp',
     shortcut: '/favicon.ico',

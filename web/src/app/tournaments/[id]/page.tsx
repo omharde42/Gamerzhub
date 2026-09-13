@@ -20,6 +20,9 @@ import { BackHeader } from '@/components/common/back-header';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { fireCelebration } from '@/components/hud/celebration';
+import { PlayerActionCenter } from '@/components/tournament/player-action-center';
+import { OrganizerDashboard } from '@/components/tournament/organizer-dashboard';
+import { MatchRoomDialog } from '@/components/tournament/match-room-dialog';
 
 const ROUND_LABELS = ['Quarterfinals', 'Semifinals', 'Grand Finals 🏆'];
 
@@ -147,6 +150,17 @@ export default function TournamentDetailPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 overflow-x-hidden">
       <BackHeader title="Tournament Arena" />
+
+      {/* Player Action Center Tray */}
+      <PlayerActionCenter />
+
+      {/* Organizer Control Dashboard if user is organizer */}
+      {isOrganizer && (
+        <OrganizerDashboard
+          tournament={tourney}
+          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['tournament', id] })}
+        />
+      )}
 
       {/* Hero Banner */}
       <Card variant="glass" className="overflow-hidden rounded-[32px] border border-emerald-500/40 shadow-2xl relative">

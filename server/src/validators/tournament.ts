@@ -44,3 +44,26 @@ export const resolveDisputeValidation = [
   body('resolution').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }).withMessage('Resolution note is too long'),
   body('newWinnerId').optional({ values: 'falsy' }).isUUID().withMessage('Valid new winner team ID is required'),
 ];
+
+export const matchCheckInValidation = [
+  param('matchId').isUUID().withMessage('Valid match ID is required'),
+  body('teamId').isUUID().withMessage('Valid team ID is required'),
+];
+
+export const ticketMessageValidation = [
+  param('ticketId').isUUID().withMessage('Valid ticket ID is required'),
+  body('message').isString().trim().isLength({ min: 1, max: 2000 }).withMessage('Message must be between 1 and 2000 characters'),
+  body('attachmentUrl').optional({ values: 'falsy' }).isString().withMessage('Attachment URL must be a string'),
+];
+
+export const mapVetoValidation = [
+  param('matchId').isUUID().withMessage('Valid match ID is required'),
+  body('action').isIn(['BAN', 'PICK']).withMessage('Action must be BAN or PICK'),
+  body('mapName').isString().trim().notEmpty().withMessage('Map name is required'),
+];
+
+export const payoutStageValidation = [
+  param('id').isUUID().withMessage('Valid tournament ID is required'),
+  body('payoutStage').isIn(['PENDING', 'DISTRIBUTING', 'COMPLETED']).withMessage('Payout stage must be PENDING, DISTRIBUTING, or COMPLETED'),
+];
+

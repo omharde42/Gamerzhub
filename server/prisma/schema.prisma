@@ -94,6 +94,11 @@ model User {
   postViews           PostView[]
   chatMessageReactions ChatMessageReaction[]
   matchDisputes       MatchDispute[]
+  ticketMessages      TicketMessage[]
+  tournamentSupportTickets TournamentSupportTicket[]
+  tournamentActivities TournamentActivityFeed[]
+  tournamentInvitationsSent TournamentInvitation[] @relation("InvitationsSent")
+  tournamentInvitationsReceived TournamentInvitation[] @relation("InvitationsReceived")
   @@index([email])
   @@index([role])
 }
@@ -595,6 +600,7 @@ model Team {
   practiceSchedules PracticeSchedule[]
   scrims      Scrim[]
   tournaments TournamentTeam[]
+  tournamentInvitations TournamentInvitation[]
   @@index([name])
   @@index([rank])
   @@index([region])
@@ -674,6 +680,11 @@ model Tournament {
   entryFee        Float            @default(0)
   rules           String?
   bracketUrl      String?
+  checkInWindowMinutes Int         @default(15)
+  reminderMinutes Int              @default(5)
+  payoutStage     String           @default("PENDING") // PENDING | DISTRIBUTING | COMPLETED
+  payoutDetails   Json?
+  mapPool         String[]         @default([])
   startDate       DateTime
   endDate         DateTime?
   registrationEnd DateTime?
@@ -685,24 +696,50 @@ model Tournament {
   matches         Match[]
   participants    TournamentParticipant[]
   disputes        MatchDispute[]
+  activities      TournamentActivityFeed[]
+  tickets         TournamentSupportTicket[]
+  invitations     TournamentInvitation[]
   @@index([status])
   @@index([game])
   @@index([startDate])
 }
 
 model TournamentTeam {
-  id            String     @id @default(uuid())
-  seed          Int?
-  placement     Int?
-  registeredAt  DateTime   @default(now())
-  tournamentId  String
-  tournament    Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  teamId        String
-  team          Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  members       TournamentTeamMember[]
-  matchesAsTeam1 Match[] @relation("Team1")
-  matchesAsTeam2 Match[] @relation("Team2")
+  id                  String     @id @default(uuid())
+  seed                Int?
+  placement           Int?
+  readinessScore      Int        @default(0)
+  checkedIn           Boolean    @default(false)
+  checkedInAt         DateTime?
+  registrationStatus  String     @default("ACCEPTED") // PENDING_REVIEW | ACTION_REQUIRED | ACCEPTED | REJECTED | WAITLISTED | WITHDRAWN
+  actionRequiredNotes String?
+  registeredAt        DateTime   @default(now())
+  tournamentId        String
+  tournament          Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamId              String
+  team                Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  members             TournamentTeamMember[]
+  matchesAsTeam1      Match[]    @relation("Team1")
+  matchesAsTeam2      Match[]    @relation("Team2")
+  activities          TournamentActivityFeed[]
   @@unique([tournamentId, teamId])
+}
+
+model TournamentInvitation {
+  id           String     @id @default(uuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamId       String
+  team         Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  inviterId    String
+  inviter      User       @relation("InvitationsSent", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeId    String
+  invitee      User       @relation("InvitationsReceived", fields: [inviteeId], references: [id], onDelete: Cascade)
+  status       String     @default("PENDING") // PENDING | ACCEPTED | DECLINED
+  createdAt    DateTime   @default(now())
+
+  @@index([tournamentId])
+  @@index([inviteeId])
 }
 
 model TournamentTeamMember {
@@ -734,6 +771,9 @@ model Match {
   winnerId      String?
   scoreTeam1    Int?
   scoreTeam2    Int?
+  team1CheckedIn Boolean    @default(false)
+  team2CheckedIn Boolean    @default(false)
+  mapVetoState  Json?
   bracket       Json?
   tournamentId  String
   tournament    Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
@@ -742,7 +782,65 @@ model Match {
   team2Id       String?
   team2         TournamentTeam? @relation("Team2", fields: [team2Id], references: [id])
   disputes      MatchDispute[]
+  activities    TournamentActivityFeed[]
   @@index([tournamentId])
+}
+
+model TournamentActivityFeed {
+  id           String          @id @default(uuid())
+  tournamentId String
+  tournament   Tournament      @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamId       String?
+  team         TournamentTeam? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  matchId      String?
+  match        Match?          @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type         String          // REGISTRATION | CHECK_IN | MATCH_START | SCORE_SUBMITTED | DISPUTE | ANNOUNCEMENT
+  title        String
+  message      String
+  metadata     Json?
+  createdAt    DateTime        @default(now())
+
+  @@index([tournamentId])
+  @@index([createdAt])
+}
+
+model TournamentSupportTicket {
+  id           String          @id @default(uuid())
+  ticketNumber String          @unique
+  tournamentId String
+  tournament   Tournament      @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  matchId      String?
+  reporterId   String
+  reporter     User            @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  category     String          // SCORE_DISPUTE | ROSTER_ISSUE | CHEATING | TECHNICAL | GENERAL
+  subject      String
+  description  String
+  status       String          @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  priority     String          @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  resolution   String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  messages     TicketMessage[]
+
+  @@index([tournamentId])
+  @@index([reporterId])
+  @@index([status])
+}
+
+model TicketMessage {
+  id            String                  @id @default(uuid())
+  ticketId      String
+  ticket        TournamentSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        User                    @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderRole    String                  @default("PLAYER") // PLAYER | ADMIN | MATCH_ADMIN
+  message       String
+  attachmentUrl String?
+  createdAt     DateTime                @default(now())
+
+  @@index([ticketId])
 }
 
 // ─── Match disputes (result verification / appeals) ────────────────────────

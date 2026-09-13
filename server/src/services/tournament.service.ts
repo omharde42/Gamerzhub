@@ -4,6 +4,7 @@ import { NotFoundError, ForbiddenError, ConflictError, ValidationError } from '.
 import { emitToUser } from '../socket-emitter';
 import { notificationService } from './notification.service';
 import { achievementService } from './achievement.service';
+import { challongeService, NormalizedTournament } from './challonge.service';
 
 const ORGANIZER_ROLES = [OrgMemberRole.OWNER, OrgMemberRole.ADMIN, OrgMemberRole.MODERATOR];
 
@@ -110,9 +111,11 @@ export class TournamentService {
     }
     return tournament;
   }
-  async list(params: { page?: number; limit?: number; status?: TournamentStatus; game?: string; search?: string; q?: string }) {
+  async list(params: { page?: number; limit?: number; status?: string; game?: string; search?: string; q?: string }) {
     const { page = 1, limit = 20, status, game, search, q } = params;
-    const searchTerm = (search || q || '').trim();
+    const searchTerm = (search || q || '').trim().toLowerCase();
+
+    // 1. Query database tournaments
     const where: any = {};
     if (status) where.status = status;
     if (game) where.game = game;
@@ -123,17 +126,80 @@ export class TournamentService {
         { description: { contains: searchTerm, mode: 'insensitive' } },
       ];
     }
-    const [tournaments, total] = await Promise.all([
-      prisma.tournament.findMany({
+
+    let dbTournaments: any[] = [];
+    try {
+      dbTournaments = await prisma.tournament.findMany({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
         include: { organizer: { select: { id: true, name: true, avatar: true } }, _count: { select: { teams: true } } },
         orderBy: { startDate: 'asc' },
-      }),
-      prisma.tournament.count({ where }),
-    ]);
-    return { data: tournaments, meta: { page, limit, total, totalPages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 } };
+      });
+    } catch (e) {
+      console.error('[TournamentService] Error querying local DB tournaments:', e);
+    }
+
+    const normalizedDb: NormalizedTournament[] = dbTournaments.map((t) => ({
+      id: t.id,
+      name: t.title,
+      game: t.game || null,
+      description: t.description || null,
+      startDate: t.startDate ? t.startDate.toISOString() : null,
+      endDate: t.endDate ? t.endDate.toISOString() : null,
+      status: t.status || null,
+      participants: t._count?.teams || t.teams?.length || 0,
+      maxParticipants: t.maxTeams || null,
+      organizer: t.organizer?.name || null,
+      url: `/tournaments/${t.id}`,
+      source: 'gamerhub',
+    }));
+
+    // 2. Query Challonge API tournaments
+    const challongeList = await challongeService.getTournaments();
+
+    // 3. Filter Challonge list
+    let filteredChallonge = challongeList;
+    if (searchTerm) {
+      filteredChallonge = filteredChallonge.filter(
+        (t) =>
+          t.name.toLowerCase().includes(searchTerm) ||
+          (t.game && t.game.toLowerCase().includes(searchTerm)) ||
+          (t.description && t.description.toLowerCase().includes(searchTerm))
+      );
+    }
+    if (game) {
+      filteredChallonge = filteredChallonge.filter(
+        (t) => t.game && t.game.toLowerCase().includes(game.toLowerCase())
+      );
+    }
+    if (status) {
+      const s = status.toLowerCase();
+      filteredChallonge = filteredChallonge.filter((t) => {
+        if (!t.status) return true;
+        const st = t.status.toLowerCase();
+        if (s === 'registration_open' || s === 'open') return st === 'pending' || st === 'open' || st === 'registration_open';
+        if (s === 'in_progress') return st === 'underway' || st === 'in_progress';
+        if (s === 'completed') return st === 'complete' || st === 'completed';
+        return st.includes(s);
+      });
+    }
+
+    // 4. Merge, paginate, and return normalized list
+    const combined = [...normalizedDb, ...filteredChallonge];
+    const total = combined.length;
+    const startIndex = (page - 1) * limit;
+    const paginated = combined.slice(startIndex, startIndex + limit);
+
+    return {
+      data: paginated,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+        hasNext: page * limit < total,
+        hasPrev: page > 1,
+      },
+    };
   }
   /**
    * Register for a tournament:
@@ -545,5 +611,375 @@ export class TournamentService {
     this.broadcastUpdate({ id: tournamentId, organizerId: match.tournament.organizerId });
     return updated;
   }
+
+  // ─── Player Action Center & Team Readiness ───────────────────────────────
+
+  async getPlayerActionCenter(userId: string) {
+    const actions: Array<{ id: string; type: string; title: string; description: string; link: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
+
+    // 1. Verified Game Account check
+    const verifiedAccounts = await prisma.gameAccount.count({ where: { userId, verified: true } });
+    if (verifiedAccounts === 0) {
+      actions.push({
+        id: 'verify-game-acc',
+        type: 'VERIFY_GAME_ACCOUNT',
+        title: 'Verify Game Account',
+        description: 'Link and verify your in-game UID to participate in tournaments',
+        link: '/profile/edit',
+        priority: 'HIGH',
+      });
+    }
+
+    // 2. Pending Tournament Team Invitations
+    const pendingInvites = await prisma.tournamentInvitation.findMany({
+      where: { inviteeId: userId, status: 'PENDING' },
+      include: { tournament: { select: { title: true } }, team: { select: { name: true } } },
+    });
+    for (const invite of pendingInvites) {
+      actions.push({
+        id: `invite-${invite.id}`,
+        type: 'ACCEPT_TEAM_INVITE',
+        title: 'Accept Team Invitation',
+        description: `Join ${invite.team.name} for "${invite.tournament.title}"`,
+        link: `/tournaments/${invite.tournamentId}`,
+        priority: 'HIGH',
+      });
+    }
+
+    // 3. Action Required Registrations
+    const userTeamIds = await prisma.teamMember.findMany({
+      where: { userId },
+      select: { teamId: true },
+    });
+    const teamIdsList = userTeamIds.map((t) => t.teamId);
+    if (teamIdsList.length > 0) {
+      const actionRequiredTeams = await prisma.tournamentTeam.findMany({
+        where: { teamId: { in: teamIdsList }, registrationStatus: 'ACTION_REQUIRED' },
+        include: { tournament: { select: { title: true } } },
+      });
+      for (const tt of actionRequiredTeams) {
+        actions.push({
+          id: `resubmit-${tt.id}`,
+          type: 'RESUBMIT_REGISTRATION',
+          title: 'Resubmit Registration Details',
+          description: tt.actionRequiredNotes || `Organizer requested updates for "${tt.tournament.title}"`,
+          link: `/tournaments/${tt.tournamentId}`,
+          priority: 'HIGH',
+        });
+      }
+
+      // 4. Pending Match Check-Ins
+      const upcomingMatches = await prisma.match.findMany({
+        where: {
+          status: MatchStatus.SCHEDULED,
+          OR: [{ team1Id: { in: teamIdsList } }, { team2Id: { in: teamIdsList } }],
+        },
+        include: { tournament: { select: { title: true, checkInWindowMinutes: true } }, team1: { select: { teamId: true } }, team2: { select: { teamId: true } } },
+      });
+
+      for (const m of upcomingMatches) {
+        const isTeam1 = m.team1 && teamIdsList.includes(m.team1.teamId);
+        const isCheckedIn = isTeam1 ? m.team1CheckedIn : m.team2CheckedIn;
+        if (!isCheckedIn) {
+          actions.push({
+            id: `checkin-match-${m.id}`,
+            type: 'MATCH_CHECK_IN',
+            title: `Check in to Match #${m.matchIndex + 1}`,
+            description: `Check-in is required before lobby credentials unlock in "${m.tournament.title}"`,
+            link: `/tournaments/${m.tournamentId}`,
+            priority: 'HIGH',
+          });
+        }
+      }
+    }
+
+    return {
+      actionCount: actions.length,
+      actions,
+    };
+  }
+
+  async calculateTeamReadinessScore(tournamentTeamId: string) {
+    const tt = await prisma.tournamentTeam.findUnique({
+      where: { id: tournamentTeamId },
+      include: {
+        members: { include: { user: { include: { gameAccounts: true } } } },
+        team: { select: { avatar: true } },
+      },
+    });
+    if (!tt) return 0;
+
+    let score = 0;
+    // Roster completeness (up to 40 points)
+    if (tt.members.length >= 1) score += 40;
+
+    // Verified Game UIDs for all members (up to 30 points)
+    const verifiedCount = tt.members.filter((m) => m.user.gameAccounts?.some((g) => g.verified)).length;
+    if (tt.members.length > 0) {
+      score += Math.round((verifiedCount / tt.members.length) * 30);
+    }
+
+    // Team Branding (15 points if logo uploaded)
+    if (tt.team.avatar) score += 15;
+
+    // Check-in status (15 points if checked in)
+    if (tt.checkedIn) score += 15;
+
+    await prisma.tournamentTeam.update({
+      where: { id: tournamentTeamId },
+      data: { readinessScore: score },
+    });
+
+    return score;
+  }
+
+  // ─── Organizer Command Center & "Needs Attention" ────────────────────────
+
+  async getOrganizerCommandCenter(tournamentId: string, userId: string) {
+    await this.assertOrganizer(tournamentId, userId);
+
+    const openDisputes = await prisma.matchDispute.findMany({
+      where: { tournamentId, status: 'OPEN' },
+      include: {
+        reporter: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+        match: { select: { id: true, round: true, matchIndex: true } },
+      },
+    });
+
+    const openTickets = await prisma.tournamentSupportTicket.findMany({
+      where: { tournamentId, status: { in: ['OPEN', 'IN_PROGRESS'] } },
+      include: {
+        reporter: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const pendingReviews = await prisma.tournamentTeam.count({
+      where: { tournamentId, registrationStatus: { in: ['PENDING_REVIEW', 'ACTION_REQUIRED'] } },
+    });
+
+    const matchesNeedingCheckIn = await prisma.match.findMany({
+      where: {
+        tournamentId,
+        status: MatchStatus.SCHEDULED,
+        OR: [{ team1CheckedIn: false }, { team2CheckedIn: false }],
+      },
+      include: {
+        team1: { include: { team: { select: { name: true } } } },
+        team2: { include: { team: { select: { name: true } } } },
+      },
+    });
+
+    const urgentCount = openDisputes.length + openTickets.filter((t) => t.priority === 'HIGH' || t.priority === 'URGENT').length + pendingReviews;
+
+    return {
+      urgentCount,
+      openDisputes,
+      openTickets,
+      pendingReviews,
+      matchesNeedingCheckIn,
+    };
+  }
+
+  // ─── Match Check-In ──────────────────────────────────────────────────────
+
+  async checkInMatch(matchId: string, teamId: string, userId: string) {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        tournament: { select: { id: true, title: true } },
+        team1: { include: { members: { select: { userId: true } }, team: { select: { name: true } } } },
+        team2: { include: { members: { select: { userId: true } }, team: { select: { name: true } } } },
+      },
+    });
+    if (!match) throw new NotFoundError('Match');
+
+    const isTeam1 = match.team1?.id === teamId;
+    const isTeam2 = match.team2?.id === teamId;
+    if (!isTeam1 && !isTeam2) throw new ForbiddenError('Team not participating in this match');
+
+    const targetTeam = isTeam1 ? match.team1 : match.team2;
+    const isMember = targetTeam?.members.some((m) => m.userId === userId);
+    if (!isMember) throw new ForbiddenError('Only team members can check in');
+
+    const dataToUpdate = isTeam1 ? { team1CheckedIn: true } : { team2CheckedIn: true };
+    const updatedMatch = await prisma.match.update({
+      where: { id: matchId },
+      data: dataToUpdate,
+    });
+
+    await this.logTournamentActivity(match.tournament.id, {
+      type: 'CHECK_IN',
+      title: 'Team Checked In',
+      message: `${targetTeam?.team.name} checked in to Match #${match.matchIndex + 1}`,
+      matchId,
+      teamId,
+      userId,
+    });
+
+    return updatedMatch;
+  }
+
+  // ─── Activity Feed Logging ───────────────────────────────────────────────
+
+  async logTournamentActivity(
+    tournamentId: string,
+    data: { type: string; title: string; message: string; teamId?: string; matchId?: string; userId?: string; metadata?: any }
+  ) {
+    const entry = await prisma.tournamentActivityFeed.create({
+      data: {
+        tournamentId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        teamId: data.teamId,
+        matchId: data.matchId,
+        userId: data.userId,
+        metadata: data.metadata || {},
+      },
+      include: {
+        user: { select: { profile: { select: { username: true, avatar: true } } } },
+        team: { select: { team: { select: { name: true, avatar: true } } } },
+      },
+    });
+
+    emitToUser(tournamentId, 'tournament:activity', entry);
+    return entry;
+  }
+
+  async getTournamentActivityFeed(tournamentId: string, limit = 50) {
+    return prisma.tournamentActivityFeed.findMany({
+      where: { tournamentId },
+      include: {
+        user: { select: { profile: { select: { username: true, avatar: true } } } },
+        team: { select: { team: { select: { name: true, avatar: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  // ─── Support Ticket Messages & Chat ──────────────────────────────────────
+
+  async addTicketMessage(ticketId: string, senderId: string, data: { message: string; attachmentUrl?: string }) {
+    const ticket = await prisma.tournamentSupportTicket.findUnique({
+      where: { id: ticketId },
+      select: { tournamentId: true, reporterId: true },
+    });
+    if (!ticket) throw new NotFoundError('Support ticket');
+
+    const isOrganizer = await this.isOrganizer(ticket.tournamentId, senderId);
+    const senderRole = isOrganizer ? 'ADMIN' : 'PLAYER';
+
+    const msg = await prisma.ticketMessage.create({
+      data: {
+        ticketId,
+        senderId,
+        senderRole,
+        message: data.message,
+        attachmentUrl: data.attachmentUrl,
+      },
+      include: {
+        sender: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+      },
+    });
+
+    const recipientId = isOrganizer ? ticket.reporterId : senderId;
+    if (recipientId) {
+      await notificationService.create({
+        userId: recipientId,
+        type: NotificationType.TOURNAMENT,
+        title: 'New ticket response',
+        message: data.message.slice(0, 80),
+        link: `/tournaments/${ticket.tournamentId}`,
+      }).catch(() => {});
+    }
+
+    return msg;
+  }
+
+  async getTicketMessages(ticketId: string) {
+    return prisma.ticketMessage.findMany({
+      where: { ticketId },
+      include: {
+        sender: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // ─── Map Pick/Ban Veto System ─────────────────────────────────────────────
+
+  async processMapVeto(matchId: string, teamId: string, action: 'BAN' | 'PICK', mapName: string, userId: string) {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { tournament: { select: { id: true, mapPool: true } } },
+    });
+    if (!match) throw new NotFoundError('Match');
+
+    const vetoState: any = match.mapVetoState || { history: [], remainingMaps: match.tournament.mapPool || ['Dust II', 'Mirage', 'Inferno', 'Nuke', 'Ancient'], selectedMap: null };
+
+    vetoState.history.push({ teamId, action, mapName, timestamp: new Date() });
+    if (action === 'BAN') {
+      vetoState.remainingMaps = vetoState.remainingMaps.filter((m: string) => m !== mapName);
+    } else if (action === 'PICK') {
+      vetoState.selectedMap = mapName;
+    }
+
+    const updated = await prisma.match.update({
+      where: { id: matchId },
+      data: { mapVetoState: vetoState },
+    });
+
+    await this.logTournamentActivity(match.tournament.id, {
+      type: 'ANNOUNCEMENT',
+      title: 'Map Veto Action',
+      message: `Map ${mapName} was ${action.toLowerCase()}ed`,
+      matchId,
+      teamId,
+      userId,
+    });
+
+    return updated;
+  }
+
+  // ─── Organizer Payout Distribution Stage Manager ─────────────────────────
+
+  async updatePayoutStage(tournamentId: string, userId: string, payoutStage: string, details?: any) {
+    await this.assertOrganizer(tournamentId, userId);
+
+    const updated = await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { payoutStage, payoutDetails: details || {} },
+    });
+
+    await this.logTournamentActivity(tournamentId, {
+      type: 'ANNOUNCEMENT',
+      title: 'Prize Payout Updated',
+      message: `Prize distribution stage updated to ${payoutStage}`,
+      userId,
+    });
+
+    return updated;
+  }
+
+  async forfeitNoShowTeam(matchId: string, forfeitTeamId: string, userId: string) {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { tournament: { select: { id: true, organizerId: true } } },
+    });
+    if (!match) throw new NotFoundError('Match');
+    await this.assertOrganizer(match.tournament.id, userId);
+
+    const winningTeamId = match.team1Id === forfeitTeamId ? match.team2Id : match.team1Id;
+    if (!winningTeamId) throw new ValidationError({ forfeitTeamId: ['Cannot forfeit match without valid opponent'] });
+
+    return this.submitResult(match.tournament.id, matchId, userId, {
+      scoreTeam1: match.team1Id === winningTeamId ? 1 : 0,
+      scoreTeam2: match.team2Id === winningTeamId ? 1 : 0,
+      winnerId: winningTeamId,
+    });
+  }
 }
 export const tournamentService = new TournamentService();
+

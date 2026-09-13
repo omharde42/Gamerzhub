@@ -4,10 +4,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Trophy, Search, Gamepad2, Users, DollarSign, Calendar, Sparkles, Zap, Shield, Star, Clock } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Trophy, Search, Users, Calendar, Clock, ExternalLink, AlertCircle, Shield } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
-import { formatDate, formatNumber } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -15,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const STATUS_TABS = [
   { label: 'All', value: '' },
-  { label: 'Upcoming', value: 'REGISTRATION_OPEN' },
+  { label: 'Upcoming / Open', value: 'REGISTRATION_OPEN' },
   { label: 'In Progress', value: 'IN_PROGRESS' },
   { label: 'Completed', value: 'COMPLETED' },
 ];
@@ -24,9 +25,19 @@ export default function TournamentsPage() {
   const [search, setSearch] = useState('');
   const [gameFilter, setGameFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const { data: tournamentsData } = useQuery({
+
+  const { data: tournamentsData, isLoading, isError } = useQuery({
     queryKey: ['tournaments', search, gameFilter, statusFilter],
-    queryFn: () => api.get(`/tournaments?search=${encodeURIComponent(search)}&game=${encodeURIComponent(gameFilter)}&status=${statusFilter}`).then((r) => r.data),
+    queryFn: async () => {
+      const res = await api.get('/tournaments', {
+        params: {
+          search: search || undefined,
+          game: gameFilter || undefined,
+          status: statusFilter || undefined,
+        },
+      });
+      return res.data;
+    },
     refetchInterval: 30000,
   });
 
@@ -39,16 +50,12 @@ export default function TournamentsPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
             <Trophy className="h-6 w-6 text-amber-400" />
-            Tournaments & Arena Leagues
+            Tournament Discovery & Arena Leagues
           </h1>
-          <p className="text-xs text-muted-foreground">Compete in official tournaments, win prize pools, and gain global ranking points.</p>
+          <p className="text-xs text-muted-foreground">
+            Explore live and upcoming competitive esports tournaments powered by GamerZ Hub & Challonge.
+          </p>
         </div>
-
-        <Link href="/tournaments/create">
-          <Button variant="gradient" size="sm" className="gap-2 text-sm font-extrabold rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25 h-10 px-4">
-            <Trophy className="h-4 w-4" /> Create Tournament
-          </Button>
-        </Link>
       </div>
 
       {/* Status Filter Tabs */}
@@ -68,12 +75,12 @@ export default function TournamentsPage() {
         ))}
       </div>
 
-      {/* Search & Filter */}
+      {/* Search & Game Filter */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search tournaments by title or game..."
+            placeholder="Search tournaments by name or game..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 h-10 rounded-2xl bg-card/60 border-white/10"
@@ -87,66 +94,140 @@ export default function TournamentsPage() {
             <SelectItem value="">All Games</SelectItem>
             <SelectItem value="Valorant">Valorant</SelectItem>
             <SelectItem value="CS2">CS2</SelectItem>
-            <SelectItem value="PUBG PC">PUBG PC</SelectItem>
             <SelectItem value="League of Legends">League of Legends</SelectItem>
+            <SelectItem value="Smash">Super Smash Bros.</SelectItem>
+            <SelectItem value="Rocket League">Rocket League</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-60 rounded-[28px] bg-card/40" />
+          ))}
+        </div>
+      )}
+
+      {/* Error State */}
+      {isError && (
+        <Card variant="glass" className="p-8 text-center rounded-[28px] border-red-500/30 bg-red-950/20">
+          <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+          <h3 className="font-extrabold text-base text-foreground">Unable to load tournaments right now.</h3>
+          <p className="text-xs text-muted-foreground mt-1">Please try again later or refresh the page.</p>
+        </Card>
+      )}
+
       {/* Tournaments Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {displayList.map((t: any, i: number) => (
-          <motion.div
-            key={t.id}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-          >
-            <Card variant="glass" className="hover:border-emerald-500/50 transition-all rounded-[28px] overflow-hidden group">
-              {t.banner && (
-                <div className="h-36 relative overflow-hidden">
-                  <img src={t.banner} alt={t.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0A0E17] via-transparent to-transparent" />
-                  <Badge className="absolute top-3 right-3 bg-emerald-500/90 text-black font-extrabold text-[10px] px-2.5 py-0.5 rounded-full shadow-md">
-                    ${formatNumber(t.prizePool)} PRIZE POOL
-                  </Badge>
-                </div>
-              )}
-              <CardContent className="p-5 space-y-4">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-extrabold text-base truncate text-foreground group-hover:text-emerald-400 transition-colors">{t.title}</h3>
-                    <Badge variant="outline" className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border-emerald-500/30 px-2 py-0.5 shrink-0">
-                      {t.status?.replace('_', ' ') || 'OPEN'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-emerald-400 font-mono font-bold">{t.game}</p>
-                </div>
+      {!isLoading && !isError && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {displayList.map((t: any, i: number) => {
+            const isExternal = t.url && (t.url.startsWith('http://') || t.url.startsWith('https://'));
+            const isChallonge = t.source === 'challonge';
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t border-white/10">
-                  <span className="flex items-center gap-1 font-semibold text-foreground"><Users className="h-3.5 w-3.5 text-emerald-400" />{t.teams || t._count?.teams || 0}/{t.maxTeams || 16} Squads</span>
-                  <span className="flex items-center gap-1 font-semibold text-foreground"><Clock className="h-3.5 w-3.5 text-amber-400" />{formatDate(t.startDate)}</span>
-                </div>
+            return (
+              <motion.div
+                key={t.id || i}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+              >
+                <Card variant="glass" className="hover:border-emerald-500/50 transition-all rounded-[28px] overflow-hidden group h-full flex flex-col justify-between">
+                  <CardContent className="p-5 space-y-4 flex-1 flex flex-col justify-between">
+                    <div className="space-y-2 min-w-0">
+                      {/* Top Badges */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-mono px-2.5 py-0.5 font-bold border ${
+                            isChallonge
+                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+                              : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                          }`}
+                        >
+                          {isChallonge ? '⚡ Challonge' : '🏆 GamerZ Hub'}
+                        </Badge>
 
-                <div className="pt-2 flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground font-mono">{t.rating}</span>
-                  <Link href={`/tournaments/${t.id}`}>
-                    <Button variant="gradient" size="sm" className="h-8 px-3 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
-                      Register Team
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+                        {t.status && (
+                          <Badge variant="outline" className="text-[10px] font-mono bg-white/5 text-gray-300 border-white/10 px-2 py-0.5 uppercase">
+                            {t.status.replace('_', ' ')}
+                          </Badge>
+                        )}
+                      </div>
 
-      {displayList.length === 0 && (
+                      {/* Tournament Name & Game */}
+                      <div>
+                        <h3 className="font-extrabold text-base text-foreground group-hover:text-emerald-400 transition-colors line-clamp-2">
+                          {t.name || t.title}
+                        </h3>
+                        <p className="text-xs text-emerald-400 font-mono font-bold mt-0.5">
+                          {t.game || 'Esports Tournament'}
+                        </p>
+                      </div>
+
+                      {/* Description if available */}
+                      {t.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 font-sans pt-1">
+                          {t.description.replace(/<[^>]*>?/gm, '')}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Metadata & Footer */}
+                    <div className="space-y-3 pt-3 border-t border-white/10">
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 font-medium truncate">
+                          <Users className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                          {t.participants !== null ? `${t.participants}` : '0'}/{t.maxParticipants ? t.maxParticipants : '∞'}
+                        </span>
+                        <span className="flex items-center gap-1 font-medium truncate">
+                          <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                          {t.startDate ? formatDate(t.startDate) : 'TBD'}
+                        </span>
+                      </div>
+
+                      {t.organizer && (
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Shield className="h-3 w-3 text-purple-400 shrink-0" />
+                          <span className="truncate">Organizer: {t.organizer}</span>
+                        </div>
+                      )}
+
+                      {/* View Tournament Action */}
+                      <div className="pt-1">
+                        {isExternal ? (
+                          <a
+                            href={t.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full inline-flex items-center justify-center gap-2 h-9 px-4 text-xs font-extrabold rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md hover:opacity-95 transition-opacity"
+                          >
+                            View Tournament <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        ) : (
+                          <Link href={t.url || `/tournaments/${t.id}`}>
+                            <Button variant="gradient" size="sm" className="w-full h-9 px-4 text-xs font-extrabold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
+                              View Tournament
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !isError && displayList.length === 0 && (
         <div className="text-center py-16 text-muted-foreground">
           <Trophy className="h-10 w-10 mx-auto mb-3 opacity-40" />
-          <p className="font-bold text-foreground">No tournaments found</p>
-          <p className="text-xs mt-1">Try a different filter, or create your own tournament.</p>
+          <p className="font-bold text-foreground text-base">No tournaments found</p>
+          <p className="text-xs mt-1">Try adjusting your search query or selecting a different game filter.</p>
         </div>
       )}
     </div>

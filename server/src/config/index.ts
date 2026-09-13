@@ -5,9 +5,10 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 function requiredEnv(name: string, fallback?: string): string {
   const value = process.env[name] || fallback;
   if (!value) {
-    if (name === 'DATABASE_URL' && (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development')) {
+    if (name === 'DATABASE_URL' && (!process.env.NODE_ENV || process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')) {
       return 'postgresql://postgres:postgres@localhost:5432/gamerhub?schema=public';
     }
+    if (fallback) return fallback;
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
@@ -76,4 +77,8 @@ export const config = {
     redirectUri: process.env.RIOT_REDIRECT_URI || `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback?provider=riot`,
     mockMode: process.env.RIOT_MOCK_MODE === 'true' || process.env.NODE_ENV === 'development',
   },
+  challonge: {
+    apiKey: process.env.CHALLONGE_API_KEY || '',
+  },
 };
+
