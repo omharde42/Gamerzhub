@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { appwriteService } from './appwrite.service';
 import { AppError } from '../utils/errors';
 
 export interface FreeFireProfileInput {
@@ -77,7 +78,7 @@ export class FreeFireService {
    * Upsert Free Fire profile information
    */
   async updateProfile(userId: string, data: FreeFireProfileInput) {
-    return (prisma as any).freeFireProfile.upsert({
+    const profile = await (prisma as any).freeFireProfile.upsert({
       where: { userId },
       create: {
         userId,
@@ -104,7 +105,40 @@ export class FreeFireService {
         teammatePreference: data.teammatePreference,
         isVerified: false, // Ensure users cannot self-set verified
       },
+      include: {
+        user: {
+          select: {
+            profile: {
+              select: {
+                username: true,
+                displayName: true,
+                avatar: true,
+              },
+            },
+          },
+        },
+      },
     });
+
+    // Write-through sync to Appwrite teammate discovery read model
+    appwriteService.syncTeammateDiscovery({
+      id: `freefire_${userId}`,
+      userId,
+      gameId: 'freefire',
+      rank: profile.rank || 'HEROIC',
+      playstyle: profile.playstyle || 'BALANCED',
+      language: profile.language || 'ENGLISH',
+      micPreference: profile.micPreference,
+      availability: profile.availability || 'EVENING',
+      reputationScore: profile.reputationScore || 5.0,
+      isVerified: false,
+      username: profile.user?.profile?.username || 'Gamer',
+      displayName: profile.user?.profile?.displayName || profile.user?.profile?.username || 'Gamer',
+      avatar: profile.user?.profile?.avatar || null,
+      updatedAt: new Date().toISOString(),
+    }).catch(err => console.warn('[Appwrite] Teammate discovery sync error for Free Fire:', err?.message));
+
+    return profile;
   }
 
   /**
@@ -113,6 +147,49 @@ export class FreeFireService {
   async discoverTeammates(currentUserId: string, filters: TeammateFilterQuery) {
     const currentUserProfile = await this.getProfile(currentUserId);
 
+    // 1. Appwrite Read Model Attempt
+    const cachedCandidates = await appwriteService.getTeammateCandidates('freefire', {
+      rank: filters.rank,
+      playstyle: filters.playstyle,
+      language: filters.language,
+      availability: filters.availability,
+      limit: filters.limit || 20,
+    });
+
+    if (cachedCandidates && cachedCandidates.length > 0) {
+      // Filter out current user if returned in Appwrite results
+      const filteredCached = cachedCandidates.filter(c => c.userId !== currentUserId);
+      if (filteredCached.length > 0) {
+        return filteredCached.map(candidate => {
+          const matchDetails = this.calculateCompatibility(currentUserProfile, candidate);
+          return {
+            profile: {
+              userId: candidate.userId,
+              rank: candidate.rank,
+              playstyle: candidate.playstyle,
+              language: candidate.language,
+              micPreference: candidate.micPreference,
+              availability: candidate.availability,
+              reputationScore: candidate.reputationScore,
+              isVerified: false,
+              user: {
+                id: candidate.userId,
+                profile: {
+                  username: candidate.username,
+                  displayName: candidate.displayName,
+                  avatar: candidate.avatar,
+                },
+              },
+            },
+            compatibility: matchDetails.score,
+            reasons: matchDetails.reasons,
+            isSelfReported: true,
+          };
+        }).sort((a: any, b: any) => b.compatibility - a.compatibility);
+      }
+    }
+
+    // 2. Primary Source Fallback (Prisma PostgreSQL)
     const candidates = await (prisma as any).freeFireProfile.findMany({
       where: {
         userId: { not: currentUserId },
@@ -137,6 +214,26 @@ export class FreeFireService {
         },
       },
     });
+
+    // Asynchronously populate Appwrite cache
+    for (const c of candidates) {
+      appwriteService.syncTeammateDiscovery({
+        id: `freefire_${c.userId}`,
+        userId: c.userId,
+        gameId: 'freefire',
+        rank: c.rank,
+        playstyle: c.playstyle,
+        language: c.language,
+        micPreference: c.micPreference,
+        availability: c.availability,
+        reputationScore: c.reputationScore,
+        isVerified: false,
+        username: c.user?.profile?.username || 'Gamer',
+        displayName: c.user?.profile?.displayName || c.user?.profile?.username || 'Gamer',
+        avatar: c.user?.profile?.avatar || null,
+        updatedAt: new Date().toISOString(),
+      }).catch(err => console.warn('[Appwrite] Lazy teammate sync warning:', err?.message));
+    }
 
     return candidates.map((candidate: any) => {
       const matchDetails = this.calculateCompatibility(currentUserProfile, candidate);

@@ -1,6 +1,7 @@
 import prisma from '../config/database';
 import { io } from '../index';
 import { steamService } from './steam.service';
+import { appwriteService } from './appwrite.service';
 import { AppError } from '../utils/errors';
 
 export interface SyncResult {
@@ -60,6 +61,17 @@ export class GameSyncService {
         steamConnectedAt: new Date(),
       },
     });
+
+    appwriteService.syncGameProfile({
+      userId,
+      game: 'STEAM',
+      inGameUid: profile.steamId,
+      inGameName: profile.username,
+      level: profile.level,
+      verified: true,
+      syncStatus: 'SUCCESS',
+      updatedAt: new Date().toISOString(),
+    }).catch(err => console.warn('[Appwrite] Game profile sync warning on Steam sync:', err?.message));
 
     this.broadcastUpdate(userId, 'STEAM', updated);
     return { success: true, platform: 'STEAM', gameAccount: updated };
