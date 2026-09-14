@@ -9,10 +9,48 @@ import { challongeService, NormalizedTournament } from './challonge.service';
 const ORGANIZER_ROLES = [OrgMemberRole.OWNER, OrgMemberRole.ADMIN, OrgMemberRole.MODERATOR];
 
 export class TournamentService {
-  async create(data: { title: string; description?: string; game: string; type?: TournamentType; format?: TournamentType; maxTeams: number; prizePool?: number; entryFee?: number; startDate: string; rules?: string }, userId: string) {
-    const { startDate, ...rest } = data;
-    const type = rest.type || rest.format || TournamentType.SINGLE_ELIMINATION;
+  async create(
+    data: {
+      title: string;
+      description?: string;
+      game: string;
+      type?: TournamentType;
+      format?: TournamentType;
+      maxTeams: number;
+      minTeamSize?: number;
+      maxTeamSize?: number;
+      prizePool?: number;
+      entryFee?: number;
+      startDate: string;
+      endDate?: string;
+      registrationEnd?: string;
+      rules?: string;
+      mapPool?: string[];
+      formatMode?: 'SOLO' | 'DUO' | 'SQUAD';
+      status?: TournamentStatus;
+    },
+    userId: string
+  ) {
+    const { startDate, endDate, registrationEnd, mapPool, formatMode, status, ...rest } = data;
+    let type = rest.type || rest.format || TournamentType.SINGLE_ELIMINATION;
+    if (formatMode || rest.game.toLowerCase().includes('pubg') || rest.game.toLowerCase().includes('free fire')) {
+      type = TournamentType.BATTLE_ROYALE;
+    }
     const organizerId = await this.resolveOrganizerId(userId);
+
+    let minTeamSize = rest.minTeamSize || 1;
+    let maxTeamSize = rest.maxTeamSize || 5;
+    if (formatMode === 'SOLO') {
+      minTeamSize = 1;
+      maxTeamSize = 1;
+    } else if (formatMode === 'DUO') {
+      minTeamSize = 2;
+      maxTeamSize = 2;
+    } else if (formatMode === 'SQUAD') {
+      minTeamSize = 4;
+      maxTeamSize = 5;
+    }
+
     return prisma.tournament.create({
       data: {
         title: rest.title,
@@ -20,14 +58,34 @@ export class TournamentService {
         game: rest.game,
         type,
         maxTeams: rest.maxTeams,
-        prizePool: rest.prizePool,
-        entryFee: rest.entryFee,
-        startDate: new Date(startDate),
+        minTeamSize,
+        maxTeamSize,
+        prizePool: rest.prizePool || 0,
+        entryFee: rest.entryFee || 0,
         rules: rest.rules,
+        mapPool: mapPool || [],
+        customFields: { formatMode: formatMode || (maxTeamSize === 1 ? 'SOLO' : maxTeamSize === 2 ? 'DUO' : 'SQUAD') },
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : undefined,
+        registrationEnd: registrationEnd ? new Date(registrationEnd) : undefined,
         organizerId,
-        status: TournamentStatus.REGISTRATION_OPEN,
+        status: status || TournamentStatus.DRAFT,
       },
     });
+  }
+
+  async updateStatus(tournamentId: string, status: TournamentStatus, userId: string) {
+    await this.assertOrganizer(tournamentId, userId);
+    const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (!tournament) throw new NotFoundError('Tournament');
+
+    const updated = await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status, endDate: status === TournamentStatus.COMPLETED ? new Date() : tournament.endDate },
+    });
+
+    this.broadcastUpdate({ id: tournamentId, organizerId: tournament.organizerId });
+    return updated;
   }
 
   /**
@@ -1155,6 +1213,154 @@ export class TournamentService {
       disputes,
     };
   }
+
+  // ─── Workspace & Workspace Chat ──────────────────────────────────────────────
+
+  async getWorkspace(tournamentId: string, userId?: string) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        announcements: { orderBy: { createdAt: 'desc' } },
+        teams: {
+          where: { status: 'ACCEPTED' },
+          include: {
+            team: true,
+            members: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    profile: { select: { username: true, avatar: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                profile: { select: { username: true, avatar: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tournament) throw new NotFoundError('Tournament');
+
+    let isOrganizer = false;
+    let isApprovedParticipant = false;
+
+    if (userId) {
+      isOrganizer = tournament.organizerId === userId;
+      if (!isOrganizer) {
+        const teamMatch = tournament.teams.some((t: any) =>
+          t.members.some((m: any) => m.userId === userId)
+        );
+        const partMatch = tournament.participants.some((p: any) => p.userId === userId);
+        isApprovedParticipant = teamMatch || partMatch;
+      }
+    }
+
+    const canAccessPrivateCredentials = isOrganizer || isApprovedParticipant;
+
+    return {
+      id: tournament.id,
+      title: tournament.title,
+      description: tournament.description,
+      game: tournament.game,
+      type: tournament.type,
+      status: tournament.status,
+      startDate: tournament.startDate,
+      rules: tournament.rules,
+      prizePool: tournament.prizePool,
+      maxTeams: tournament.maxTeams,
+      announcements: tournament.announcements,
+      teams: tournament.teams,
+      participants: tournament.participants,
+      isOrganizer,
+      isApprovedParticipant,
+      roomCredentials: canAccessPrivateCredentials && (tournament as any).roomDetails ? (tournament as any).roomDetails : null,
+    };
+  }
+
+  async getTournamentChat(tournamentId: string, userId: string) {
+    const workspace = await this.getWorkspace(tournamentId, userId);
+    if (!workspace.isOrganizer && !workspace.isApprovedParticipant) {
+      throw new ForbiddenError('Tournament chat access requires approved participant or organizer status');
+    }
+
+    const roomName = `Tournament:${tournamentId}`;
+    let chat = await prisma.chat.findFirst({
+      where: { name: roomName },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          take: 100,
+          include: {
+            sender: {
+              select: {
+                id: true,
+                profile: { select: { username: true, avatar: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!chat) {
+      chat = await prisma.chat.create({
+        data: {
+          name: roomName,
+          isGroup: true,
+        },
+        include: {
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            take: 100,
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  profile: { select: { username: true, avatar: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    return chat;
+  }
+
+  async sendTournamentChatMessage(tournamentId: string, userId: string, text: string) {
+    const chat = await this.getTournamentChat(tournamentId, userId);
+    const message = await prisma.message.create({
+      data: {
+        chatId: chat.id,
+        senderId: userId,
+        content: text,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            profile: { select: { username: true, avatar: true } },
+          },
+        },
+      },
+    });
+
+    return message;
+  }
 }
 export const tournamentService = new TournamentService();
+
+
 

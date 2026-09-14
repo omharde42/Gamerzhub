@@ -4,6 +4,7 @@ import { authenticate, optionalAuth } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import {
   createTournamentValidation,
+  updateTournamentStatusValidation,
   registerTournamentValidation,
   tournamentIdParamValidation,
   submitResultValidation,
@@ -34,6 +35,7 @@ router.get('/:id/activity-feed', optionalAuth, tournamentIdParamValidation, vali
 
 // Protected mutation endpoints
 router.post('/', authenticate, createTournamentValidation, validate, tournamentController.create.bind(tournamentController));
+router.patch('/:id/status', authenticate, updateTournamentStatusValidation, validate, tournamentController.updateStatus.bind(tournamentController));
 router.post('/:id/register', authenticate, registerTournamentValidation, validate, tournamentController.registerTeam.bind(tournamentController));
 router.post('/:id/check-in', authenticate, tournamentIdParamValidation, validate, tournamentController.checkIn.bind(tournamentController));
 router.post('/:id/brackets', authenticate, tournamentIdParamValidation, validate, tournamentController.generateBrackets.bind(tournamentController));

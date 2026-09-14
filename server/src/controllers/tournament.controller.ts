@@ -9,7 +9,12 @@ import prisma from '../config/database';
 export class TournamentController {
   create = asyncHandler(async (req: AuthRequest, res: Response) => {
     const tournament = await tournamentService.create(req.body, req.user!.userId);
-    sendSuccess(res, tournament, undefined, 201);
+    sendSuccess(res, tournament, 'Tournament created successfully', 201);
+  });
+
+  updateStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const tournament = await tournamentService.updateStatus(req.params.id, req.body.status, req.user!.userId);
+    sendSuccess(res, tournament, 'Tournament status updated');
   });
 
   getById = asyncHandler(async (req: AuthRequest, res: Response) => {
