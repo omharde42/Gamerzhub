@@ -48,6 +48,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SmartRegistrationDialog } from '@/components/tournament/registration-dialog';
 import { DisputeCenter } from '@/components/tournament/dispute-center';
 import { TournamentWorkspaceChat } from '@/components/tournament/tournament-workspace-chat';
+import { OrganizerResultEntryDialog } from '@/components/tournament/organizer-result-entry-dialog';
+import { TournamentLeaderboard } from '@/components/tournament/tournament-leaderboard';
 
 const ROUND_LABELS = ['Quarterfinals', 'Semifinals', 'Grand Finals 🏆'];
 
@@ -58,6 +60,7 @@ export default function TournamentDetailPage() {
   const queryClient = useQueryClient();
 
   const [showRegModal, setShowRegModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('overview');
   const [resultMatch, setResultMatch] = useState<any>(null);
   const [disputeMatch, setDisputeMatch] = useState<any>(null);
@@ -286,6 +289,17 @@ export default function TournamentDetailPage() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {isOrganizer && tourney.status !== 'COMPLETED' && (
+                <Button
+                  size="lg"
+                  onClick={() => setShowResultModal(true)}
+                  className="font-extrabold rounded-2xl gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30"
+                >
+                  <Trophy className="h-5 w-5" />
+                  Enter Results
+                </Button>
+              )}
+
               {isOrganizer && !hasBracket && tourney.teams?.length >= 2 && (
                 <Button
                   variant="gradient"
@@ -399,6 +413,9 @@ export default function TournamentDetailPage() {
           </TabsTrigger>
           <TabsTrigger value="credentials" className="rounded-xl text-xs font-bold gap-1.5">
             <Lock className="h-3.5 w-3.5 text-amber-400" /> Room Credentials
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="rounded-xl text-xs font-bold gap-1.5">
+            <Trophy className="h-3.5 w-3.5 text-amber-400" /> Leaderboard
           </TabsTrigger>
         </TabsList>
 
@@ -685,10 +702,18 @@ export default function TournamentDetailPage() {
             </Card>
           )}
         </TabsContent>
+
+        {/* WORKSPACE TAB 8: LEADERBOARD */}
+        <TabsContent value="leaderboard">
+          <TournamentLeaderboard tournamentId={id as string} isCompleted={tourney.status === 'COMPLETED'} />
+        </TabsContent>
       </Tabs>
 
       {/* SMART REGISTRATION MODAL */}
       <SmartRegistrationDialog tournament={tourney} isOpen={showRegModal} onOpenChange={setShowRegModal} />
+
+      {/* ORGANIZER RESULT ENTRY MODAL */}
+      <OrganizerResultEntryDialog tournament={tourney} isOpen={showResultModal} onOpenChange={setShowResultModal} />
 
       {/* POST ANNOUNCEMENT MODAL (ORGANIZER) */}
       <Dialog open={showAnnouncementModal} onOpenChange={setShowAnnouncementModal}>

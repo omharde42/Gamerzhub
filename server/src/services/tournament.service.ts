@@ -1359,8 +1359,346 @@ export class TournamentService {
 
     return message;
   }
+
+  // ─── Phase 5: Result Entry, Validation, Finalization, Leaderboard & History ─
+
+  async saveResults(
+    tournamentId: string,
+    userId: string,
+    results: Array<{
+      teamId: string;
+      placement: number;
+      kills?: number;
+      points?: number;
+      score?: number;
+      notes?: string;
+    }>
+  ) {
+    await this.assertOrganizer(tournamentId, userId);
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: { teams: { select: { id: true, status: true, teamId: true } } },
+    });
+    if (!tournament) throw new NotFoundError('Tournament');
+    if (tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED') {
+      throw new ForbiddenError('Cannot modify results for a completed or cancelled tournament');
+    }
+
+    if (!Array.isArray(results) || results.length === 0) {
+      throw new ForbiddenError('Results array cannot be empty');
+    }
+
+    const acceptedTeamIds = new Set<string>(
+      tournament.teams.filter((t) => t.status === 'ACCEPTED').map((t) => t.id)
+    );
+
+    const seenTeamIds = new Set<string>();
+    const seenPlacements = new Set<number>();
+
+    for (const r of results) {
+      if (!r.teamId) throw new ForbiddenError('Team ID is required for each result');
+      if (!acceptedTeamIds.has(r.teamId)) {
+        throw new ForbiddenError(`Team ${r.teamId} is not an approved participant in this tournament`);
+      }
+      if (seenTeamIds.has(r.teamId)) {
+        throw new ForbiddenError(`Duplicate result entry for team ${r.teamId}`);
+      }
+      seenTeamIds.add(r.teamId);
+
+      if (typeof r.placement !== 'number' || r.placement < 1) {
+        throw new ForbiddenError(`Invalid placement (${r.placement}) for team ${r.teamId}. Placement must be >= 1`);
+      }
+
+      if (r.kills !== undefined && (typeof r.kills !== 'number' || r.kills < 0)) {
+        throw new ForbiddenError(`Invalid kills value for team ${r.teamId}. Kills cannot be negative`);
+      }
+      if (r.points !== undefined && (typeof r.points !== 'number' || r.points < 0)) {
+        throw new ForbiddenError(`Invalid points value for team ${r.teamId}. Points cannot be negative`);
+      }
+      if (r.score !== undefined && (typeof r.score !== 'number' || r.score < 0)) {
+        throw new ForbiddenError(`Invalid score value for team ${r.teamId}. Score cannot be negative`);
+      }
+
+      seenPlacements.add(r.placement);
+    }
+
+    // Save/upsert draft or entered results
+    const savedResults = await Promise.all(
+      results.map(async (r) => {
+        const kills = r.kills ?? 0;
+        const points = r.points ?? 0;
+        const score = r.score ?? points + kills;
+
+        return (prisma as any).tournamentResult.upsert({
+          where: { tournamentId_teamId: { tournamentId, teamId: r.teamId } },
+          create: {
+            tournamentId,
+            teamId: r.teamId,
+            placement: r.placement,
+            kills,
+            points,
+            score,
+            status: 'ENTERED',
+            notes: r.notes || null,
+            enteredById: userId,
+          },
+          update: {
+            placement: r.placement,
+            kills,
+            points,
+            score,
+            status: 'ENTERED',
+            notes: r.notes || null,
+            enteredById: userId,
+          },
+        });
+      })
+    );
+
+    this.broadcastUpdate(tournament);
+    return savedResults;
+  }
+
+  async finalizeResults(tournamentId: string, userId: string) {
+    await this.assertOrganizer(tournamentId, userId);
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        teams: {
+          include: {
+            team: true,
+            members: { include: { user: { include: { profile: true } } } },
+          },
+        },
+        participants: { include: { user: { include: { profile: true } } } },
+      },
+    });
+
+    if (!tournament) throw new NotFoundError('Tournament');
+    if (tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED') {
+      throw new ForbiddenError('Tournament results have already been finalized and completed.');
+    }
+
+    const existingResults = await (prisma as any).tournamentResult.findMany({
+      where: { tournamentId },
+      include: { team: { include: { team: true } } },
+    });
+
+    if (!existingResults || existingResults.length === 0) {
+      throw new ForbiddenError('No results entered for this tournament. Please enter results before finalizing.');
+    }
+
+    const now = new Date();
+
+    // 1. Mark results as FINALIZED
+    await (prisma as any).tournamentResult.updateMany({
+      where: { tournamentId },
+      data: {
+        status: 'FINALIZED',
+        finalizedById: userId,
+        finalizedAt: now,
+      },
+    });
+
+    // 2. Update tournament status to COMPLETED
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status: 'COMPLETED', endDate: now },
+    });
+
+    // 3. Update team placements and create TournamentHistory
+    const placementLabel: Record<number, string> = { 1: '1st Place', 2: '2nd Place', 3: '3rd Place' };
+
+    for (const res of existingResults) {
+      // Update placement on TournamentTeam
+      await prisma.tournamentTeam.update({
+        where: { id: res.teamId },
+        data: { placement: res.placement },
+      }).catch(() => {});
+
+      const label = placementLabel[res.placement] || `#${res.placement} Place`;
+      const matchingTeam = tournament.teams.find((t) => t.id === res.teamId);
+
+      if (matchingTeam) {
+        for (const member of matchingTeam.members) {
+          if (member.user?.profile?.id) {
+            await prisma.tournamentHistory.create({
+              data: {
+                tournamentName: tournament.title,
+                placement: label,
+                prize: res.placement === 1 && tournament.prizePool ? `$${tournament.prizePool}` : undefined,
+                profileId: member.user.profile.id,
+              },
+            }).catch(() => {});
+
+            if (res.placement === 1) {
+              achievementService.unlockByKey(member.userId, 'TOURNAMENT_WINNER').catch(() => {});
+            }
+            if (res.placement <= 3) {
+              achievementService.unlockByKey(member.userId, 'TOURNAMENT_TOP3').catch(() => {});
+            }
+
+            await notificationService.createWithDedupe(
+              {
+                userId: member.userId,
+                type: NotificationType.TOURNAMENT_RESULT,
+                title: `Tournament Finalized — ${label}`,
+                message: `Your team ${matchingTeam.team.name} finished ${label} in "${tournament.title}".`,
+                link: `/tournaments/${tournamentId}`,
+              },
+              `tournament-finalized-${tournamentId}-${member.userId}`
+            );
+          }
+        }
+      }
+    }
+
+    // Real-time notification to all participants
+    const allUserIds = new Set<string>();
+    tournament.teams.forEach((t) => t.members.forEach((m) => allUserIds.add(m.userId)));
+    tournament.participants.forEach((p) => allUserIds.add(p.userId));
+
+    for (const pId of allUserIds) {
+      emitToUser(pId, 'tournament:completed', { tournamentId });
+    }
+
+    this.broadcastUpdate(tournament);
+
+    return {
+      message: 'Tournament results finalized and tournament completed successfully.',
+      finalizedAt: now,
+      resultsCount: existingResults.length,
+    };
+  }
+
+  async getLeaderboard(tournamentId: string) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { id: true, title: true, game: true, status: true },
+    });
+
+    if (!tournament) throw new NotFoundError('Tournament');
+
+    const results = await (prisma as any).tournamentResult.findMany({
+      where: { tournamentId },
+      include: {
+        team: {
+          include: {
+            team: { select: { id: true, name: true, avatar: true, tag: true } },
+            members: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    profile: { select: { username: true, avatar: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ placement: 'asc' }, { score: 'desc' }, { kills: 'desc' }],
+    });
+
+    if (results.length > 0) {
+      return results.map((r: any, idx: number) => ({
+        rank: idx + 1,
+        teamId: r.teamId,
+        teamName: r.team?.team?.name || 'Unknown Team',
+        teamAvatar: r.team?.team?.avatar || null,
+        placement: r.placement,
+        kills: r.kills,
+        points: r.points,
+        score: r.score,
+        status: r.status,
+        notes: r.notes,
+        members: (r.team?.members || []).map((m: any) => ({
+          userId: m.userId,
+          username: m.user?.profile?.username || 'Player',
+          avatar: m.user?.profile?.avatar || null,
+        })),
+      }));
+    }
+
+    // Fallback: derive standings from match standings if results not entered yet
+    const fallbackStandings = await this.getStandings(tournamentId);
+    return fallbackStandings.map((st: any, idx: number) => ({
+      rank: idx + 1,
+      teamId: st.id,
+      teamName: st.team?.name || 'Unknown Team',
+      teamAvatar: st.team?.avatar || null,
+      placement: st.placement || idx + 1,
+      kills: 0,
+      points: st.wins * 3,
+      score: st.wins * 3,
+      status: 'DERIVED',
+      notes: null,
+      members: (st.members || []).map((m: any) => ({
+        userId: m.userId,
+        username: m.user?.profile?.username || 'Player',
+        avatar: m.user?.profile?.avatar || null,
+      })),
+    }));
+  }
+
+  async getUserTournamentHistory(userId: string) {
+    const profile = await prisma.profile.findUnique({
+      where: { userId },
+      include: {
+        tournamentHistory: {
+          orderBy: { date: 'desc' },
+        },
+      },
+    });
+
+    const userTeams = await prisma.tournamentTeam.findMany({
+      where: {
+        status: 'ACCEPTED',
+        OR: [
+          { team: { members: { some: { userId } } } },
+          { members: { some: { userId } } },
+        ],
+      },
+      include: {
+        tournament: { select: { id: true, title: true, game: true, status: true, endDate: true, prizePool: true } },
+        team: { select: { id: true, name: true } },
+      },
+      orderBy: { registeredAt: 'desc' },
+    });
+
+    const explicitHistory = (profile?.tournamentHistory || []).map((h) => ({
+      id: h.id,
+      tournamentName: h.tournamentName,
+      placement: h.placement || 'Participant',
+      prize: h.prize || null,
+      date: h.date,
+      source: 'OFFICIAL_RESULT',
+    }));
+
+    const participationHistory = userTeams.map((ut) => ({
+      id: `ut-${ut.id}`,
+      tournamentId: ut.tournament.id,
+      tournamentName: ut.tournament.title,
+      game: ut.tournament.game,
+      teamName: ut.team.name,
+      placement: ut.placement ? `#${ut.placement} Place` : ut.tournament.status === 'COMPLETED' ? 'Finished' : 'Active',
+      prize: ut.placement === 1 && ut.tournament.prizePool ? `$${ut.tournament.prizePool}` : null,
+      date: ut.tournament.endDate || ut.registeredAt,
+      status: ut.tournament.status,
+      source: 'PARTICIPATION_RECORD',
+    }));
+
+    return {
+      explicitHistory,
+      participationHistory,
+    };
+  }
 }
 export const tournamentService = new TournamentService();
+
 
 
 

@@ -55,8 +55,11 @@ router.get('/tickets/:ticketId/messages', authenticate, tournamentController.get
 router.post('/tickets/:ticketId/messages', authenticate, ticketMessageValidation, validate, tournamentController.addTicketMessage.bind(tournamentController));
 
 router.post('/:id/matches/:matchId/disputes', authenticate, disputeValidation, validate, tournamentController.fileDispute.bind(tournamentController));
-router.patch('/:id/disputes/:disputeId', authenticate, resolveDisputeValidation, validate, tournamentController.resolveDispute.bind(tournamentController));
-router.patch('/:id/payouts', authenticate, payoutStageValidation, validate, tournamentController.updatePayoutStage.bind(tournamentController));
+router.get('/user/history', authenticate, tournamentController.getUserHistory.bind(tournamentController));
+router.get('/:id/leaderboard', optionalAuth, tournamentController.getLeaderboard.bind(tournamentController));
+router.post('/:id/results', authenticate, tournamentController.saveResults.bind(tournamentController));
+router.post('/:id/results/finalize', authenticate, tournamentController.finalizeResults.bind(tournamentController));
 
 export default router;
+
 

@@ -168,7 +168,32 @@ export class TournamentController {
     const analytics = await tournamentService.getAnalytics(req.params.id, req.user!.userId);
     sendSuccess(res, analytics);
   });
+
+  saveResults = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const results = await tournamentService.saveResults(
+      req.params.id,
+      req.user!.userId,
+      req.body.results || req.body
+    );
+    sendSuccess(res, results, 'Tournament results saved successfully');
+  });
+
+  finalizeResults = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await tournamentService.finalizeResults(req.params.id, req.user!.userId);
+    sendSuccess(res, result, 'Tournament results finalized');
+  });
+
+  getLeaderboard = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const leaderboard = await tournamentService.getLeaderboard(req.params.id);
+    sendSuccess(res, leaderboard);
+  });
+
+  getUserHistory = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const history = await tournamentService.getUserTournamentHistory(req.user!.userId);
+    sendSuccess(res, history);
+  });
 }
 
 export const tournamentController = new TournamentController();
+
 

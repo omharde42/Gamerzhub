@@ -105,6 +105,8 @@ model User {
   tournamentInvitationsSent TournamentInvitation[] @relation("InvitationsSent")
   tournamentInvitationsReceived TournamentInvitation[] @relation("InvitationsReceived")
   organizerRatings    TournamentOrganizerRating[]
+  enteredResults      TournamentResult[] @relation("EnteredResults")
+  finalizedResults    TournamentResult[] @relation("FinalizedResults")
   @@index([email])
   @@index([role])
 }
@@ -708,6 +710,7 @@ model Tournament {
   invitations     TournamentInvitation[]
   announcements   TournamentAnnouncement[]
   organizerRatings TournamentOrganizerRating[]
+  results         TournamentResult[]
   @@index([status])
   @@index([game])
   @@index([startDate])
@@ -735,6 +738,7 @@ model TournamentTeam {
   matchesAsTeam1      Match[]            @relation("Team1")
   matchesAsTeam2      Match[]            @relation("Team2")
   activities          TournamentActivityFeed[]
+  result              TournamentResult?
   @@unique([tournamentId, teamId])
   @@index([status])
   @@index([checkInStatus])
@@ -907,6 +911,31 @@ model MatchDispute {
   reporter     User     @relation(fields: [reporterId], references: [id])
   @@index([matchId])
   @@index([tournamentId])
+  @@index([status])
+}
+
+model TournamentResult {
+  id            String         @id @default(uuid())
+  tournamentId  String
+  tournament    Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamId        String         @unique
+  team          TournamentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  placement     Int
+  kills         Int            @default(0)
+  points        Int            @default(0)
+  score         Int            @default(0)
+  status        String         @default("DRAFT") // DRAFT | ENTERED | FINALIZED
+  notes         String?
+  enteredById   String?
+  enteredBy     User?          @relation("EnteredResults", fields: [enteredById], references: [id])
+  finalizedById String?
+  finalizedBy   User?          @relation("FinalizedResults", fields: [finalizedById], references: [id])
+  finalizedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([tournamentId])
+  @@index([teamId])
   @@index([status])
 }
 
