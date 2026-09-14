@@ -50,6 +50,7 @@ import { DisputeCenter } from '@/components/tournament/dispute-center';
 import { TournamentWorkspaceChat } from '@/components/tournament/tournament-workspace-chat';
 import { OrganizerResultEntryDialog } from '@/components/tournament/organizer-result-entry-dialog';
 import { TournamentLeaderboard } from '@/components/tournament/tournament-leaderboard';
+import { ReportDialog } from '@/components/tournament/report-dialog';
 
 const ROUND_LABELS = ['Quarterfinals', 'Semifinals', 'Grand Finals 🏆'];
 
@@ -69,6 +70,7 @@ export default function TournamentDetailPage() {
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeDesc, setDisputeDesc] = useState('');
   const [showStandings, setShowStandings] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // New Announcement form state (organizer)
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -242,6 +244,15 @@ export default function TournamentDetailPage() {
             <Badge className="bg-emerald-500 text-black font-extrabold text-xs px-3 py-1 rounded-full shadow-[0_0_18px_rgba(16,185,129,0.7)] border border-emerald-300/50 animate-pulse">
               💰 ${formatNumber(tourney.prizePool || 0)} PRIZE POOL
             </Badge>
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Report Tournament"
+              className="h-9 w-9 rounded-full bg-black/40 text-red-400 backdrop-blur-md hover:bg-black/60"
+              onClick={() => setShowReportModal(true)}
+            >
+              <Flag className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -753,6 +764,11 @@ export default function TournamentDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <ReportDialog
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        tournamentId={id as string}
+      />
     </div>
   );
 }

@@ -105,3 +105,57 @@ export const organizerRatingValidation = [
   body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),
   body('feedback').optional({ values: 'falsy' }).isString().isLength({ max: 1000 }),
 ];
+
+export const VALID_REPORT_CATEGORIES = [
+  'MISLEADING_INFO',
+  'ORGANIZER_MISCONDUCT',
+  'PRIZE_DISPUTE',
+  'CANCELLATION_ISSUE',
+  'UNFAIR_ADMIN',
+  'SUSPICIOUS_ACTIVITY',
+  'CHEATING',
+  'HARASSMENT',
+  'ABUSIVE_LANGUAGE',
+  'IMPERSONATION',
+  'SPAM',
+  'INAPPROPRIATE_BEHAVIOR',
+  'INVALID_ROSTER',
+  'ABUSIVE_BEHAVIOR',
+  'THREATS',
+  'INAPPROPRIATE_CONTENT',
+  'SCAM_FRAUD',
+  'INCORRECT_RESULT',
+  'SCORE_MANIPULATION',
+  'DISPUTED_PLACEMENT',
+  'OTHER_RESULT_ISSUE',
+  'SCORE_DISPUTE',
+  'ROSTER_ISSUE',
+  'TECHNICAL',
+  'GENERAL',
+];
+
+export const createReportValidation = [
+  body('category').isString().trim().isIn(VALID_REPORT_CATEGORIES).withMessage('Invalid report category'),
+  body('subject').optional({ values: 'falsy' }).isString().trim().isLength({ max: 150 }).withMessage('Subject is too long'),
+  body('description').isString().trim().isLength({ min: 5, max: 2000 }).withMessage('Description must be 5-2000 characters'),
+  body('tournamentId').optional({ values: 'falsy' }).isUUID().withMessage('Valid tournament ID required'),
+  body('targetUserId').optional({ values: 'falsy' }).isUUID().withMessage('Valid target user ID required'),
+  body('targetTeamId').optional({ values: 'falsy' }).isUUID().withMessage('Valid target team ID required'),
+  body('targetResultId').optional({ values: 'falsy' }).isUUID().withMessage('Valid target result ID required'),
+  body('targetMessageId').optional({ values: 'falsy' }).isUUID().withMessage('Valid target message ID required'),
+  body('evidenceUrl').optional({ values: 'falsy' }).isString().trim().withMessage('Evidence URL must be a string'),
+  body('severity').optional().isIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).withMessage('Invalid severity'),
+];
+
+export const updateReportStatusValidation = [
+  param('reportId').isUUID().withMessage('Valid report ID required'),
+  body('status').isIn(['OPEN', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'RESOLVED', 'REJECTED', 'DUPLICATE', 'ESCALATED']).withMessage('Invalid report status'),
+];
+
+export const resolveReportValidation = [
+  param('reportId').isUUID().withMessage('Valid report ID required'),
+  body('status').isIn(['RESOLVED', 'REJECTED', 'DUPLICATE']).withMessage('Status must be RESOLVED, REJECTED, or DUPLICATE'),
+  body('resolutionNote').isString().trim().isLength({ min: 3, max: 2000 }).withMessage('Resolution note must be 3-2000 characters'),
+  body('actionTaken').optional().isIn(['NO_VIOLATION', 'WARNING', 'CONTENT_REMOVAL', 'PARTICIPANT_RESTRICTION', 'ORGANIZER_RESTRICTION', 'TOURNAMENT_SUSPENSION', 'TOURNAMENT_CANCELLATION', 'RESULT_CORRECTION', 'ESCALATE']).withMessage('Invalid action taken'),
+];
+

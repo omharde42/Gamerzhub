@@ -3,6 +3,7 @@ import { AuthRequest } from '../types';
 import prisma from '../config/database';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSuccess } from '../utils/response';
+import { tournamentService } from '../services/tournament.service';
 
 export class AdminController {
   getDashboardStats = asyncHandler(async (_req: AuthRequest, res: Response) => {
@@ -104,6 +105,32 @@ export class AdminController {
       total,
       totalPages: Math.ceil(total / parseInt(limit as string)),
     });
+  });
+
+  getTournamentReports = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await tournamentService.getAdminReports(req.query as any);
+    sendSuccess(res, result.reports, undefined, 200, result.pagination);
+  });
+
+  getTournamentReportDetail = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const detail = await tournamentService.getAdminReportDetail(req.params.reportId);
+    sendSuccess(res, detail);
+  });
+
+  updateReportStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const report = await tournamentService.updateReportStatus(req.params.reportId, req.user!.userId, req.body.status);
+    sendSuccess(res, report, 'Report status updated');
+  });
+
+  resolveTournamentReport = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const report = await tournamentService.resolveReport(req.params.reportId, req.user!.userId, req.body);
+    sendSuccess(res, report, 'Report resolved');
+  });
+
+  suspendTournament = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { reason } = req.body;
+    const tournament = await tournamentService.suspendTournamentByAdmin(req.params.id, req.user!.userId, reason || 'Admin suspension');
+    sendSuccess(res, tournament, 'Tournament suspended');
   });
 }
 

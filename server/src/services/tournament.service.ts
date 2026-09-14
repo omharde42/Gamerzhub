@@ -5,6 +5,7 @@ import { emitToUser } from '../socket-emitter';
 import { notificationService } from './notification.service';
 import { achievementService } from './achievement.service';
 import { challongeService, NormalizedTournament } from './challonge.service';
+import { VALID_REPORT_CATEGORIES } from '../validators/tournament';
 
 const ORGANIZER_ROLES = [OrgMemberRole.OWNER, OrgMemberRole.ADMIN, OrgMemberRole.MODERATOR];
 
@@ -1695,6 +1696,400 @@ export class TournamentService {
       explicitHistory,
       participationHistory,
     };
+  }
+
+  // ==========================================
+  // PHASE 6: SAFETY, REPORTING & MODERATION
+  // ==========================================
+
+  async createReport(
+    userId: string,
+    data: {
+      category: string;
+      subject?: string;
+      description: string;
+      tournamentId?: string;
+      targetUserId?: string;
+      targetTeamId?: string;
+      targetResultId?: string;
+      targetMessageId?: string;
+      evidenceUrl?: string;
+      severity?: string;
+    }
+  ) {
+    if (!data.category || !VALID_REPORT_CATEGORIES.includes(data.category)) {
+      throw new ValidationError({ category: ['Invalid report category'] });
+    }
+
+    if (!data.description || data.description.trim().length < 5 || data.description.length > 2000) {
+      throw new ValidationError({ description: ['Description must be between 5 and 2000 characters'] });
+    }
+
+    if (data.tournamentId) {
+      const tournament = await prisma.tournament.findUnique({ where: { id: data.tournamentId }, select: { id: true } });
+      if (!tournament) throw new NotFoundError('Tournament');
+    }
+
+    if (data.targetUserId) {
+      const targetUser = await prisma.user.findUnique({ where: { id: data.targetUserId }, select: { id: true } });
+      if (!targetUser) throw new NotFoundError('Target user');
+    }
+
+    if (data.targetTeamId) {
+      const targetTeam = await prisma.tournamentTeam.findUnique({ where: { id: data.targetTeamId }, select: { id: true, tournamentId: true } });
+      if (!targetTeam) throw new NotFoundError('Target team');
+      if (data.tournamentId && targetTeam.tournamentId !== data.tournamentId) {
+        throw new ValidationError({ targetTeamId: ['Target team does not belong to the specified tournament'] });
+      }
+    }
+
+    if (data.targetResultId) {
+      const targetResult = await prisma.tournamentResult.findUnique({ where: { id: data.targetResultId }, select: { id: true, tournamentId: true } });
+      if (!targetResult) throw new NotFoundError('Target result');
+      if (data.tournamentId && targetResult.tournamentId !== data.tournamentId) {
+        throw new ValidationError({ targetResultId: ['Target result does not belong to the specified tournament'] });
+      }
+    }
+
+    if (data.targetMessageId) {
+      const msg = await prisma.message.findUnique({ where: { id: data.targetMessageId }, select: { id: true } });
+      if (!msg) throw new NotFoundError('Message');
+    }
+
+    // Anti-spam checks: max 5 reports in 10 minutes, or duplicate open report
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const recentCount = await prisma.tournamentSupportTicket.count({
+      where: { reporterId: userId, createdAt: { gte: tenMinutesAgo } },
+    });
+    if (recentCount >= 5) {
+      throw new ConflictError('You have submitted multiple reports recently. Please wait before submitting another report.');
+    }
+
+    const duplicate = await prisma.tournamentSupportTicket.findFirst({
+      where: {
+        reporterId: userId,
+        category: data.category,
+        tournamentId: data.tournamentId || undefined,
+        targetUserId: data.targetUserId || undefined,
+        targetTeamId: data.targetTeamId || undefined,
+        status: { in: ['OPEN', 'UNDER_REVIEW', 'ACTION_REQUIRED'] },
+      },
+    });
+    if (duplicate) {
+      throw new ConflictError('You already have an active report for this issue.');
+    }
+
+    const count = await prisma.tournamentSupportTicket.count();
+    const ticketNumber = `TR-${100000 + count + 1}`;
+    const defaultSubject = data.subject || `${data.category.replace(/_/g, ' ')} Report`;
+
+    let effectiveTournamentId = data.tournamentId;
+    if (!effectiveTournamentId && data.targetTeamId) {
+      const tt = await prisma.tournamentTeam.findUnique({ where: { id: data.targetTeamId }, select: { tournamentId: true } });
+      if (tt) effectiveTournamentId = tt.tournamentId;
+    }
+    if (!effectiveTournamentId && data.targetResultId) {
+      const tr = await prisma.tournamentResult.findUnique({ where: { id: data.targetResultId }, select: { tournamentId: true } });
+      if (tr) effectiveTournamentId = tr.tournamentId;
+    }
+
+    if (!effectiveTournamentId) {
+      const fallback = await prisma.tournament.findFirst({ select: { id: true } });
+      if (!fallback) throw new ValidationError({ tournamentId: ['Tournament context is required'] });
+      effectiveTournamentId = fallback.id;
+    }
+
+    const ticket = await prisma.tournamentSupportTicket.create({
+      data: {
+        ticketNumber,
+        tournamentId: effectiveTournamentId,
+        reporterId: userId,
+        targetUserId: data.targetUserId,
+        targetTeamId: data.targetTeamId,
+        targetResultId: data.targetResultId,
+        targetMessageId: data.targetMessageId,
+        category: data.category,
+        subject: defaultSubject,
+        description: data.description,
+        evidenceUrl: data.evidenceUrl,
+        severity: data.severity || 'MEDIUM',
+        status: 'OPEN',
+      },
+      include: {
+        reporter: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+        targetUser: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+        targetTeam: { select: { id: true, team: { select: { name: true } } } },
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'REPORT_CREATED',
+        entity: 'TournamentSupportTicket',
+        entityId: ticket.id,
+        userId,
+        metadata: { category: data.category, ticketNumber },
+      },
+    });
+
+    return ticket;
+  }
+
+  async getTournamentReportsForOrganizer(tournamentId: string, userId: string) {
+    await this.assertOrganizer(tournamentId, userId);
+    const reports = await prisma.tournamentSupportTicket.findMany({
+      where: { tournamentId },
+      include: {
+        reporter: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+        targetUser: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+        targetTeam: { select: { id: true, team: { select: { name: true } } } },
+        targetResult: { select: { id: true, placement: true, score: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return reports;
+  }
+
+  async getAdminReports(query: {
+    page?: string;
+    limit?: string;
+    status?: string;
+    category?: string;
+    priority?: string;
+    severity?: string;
+    tournamentId?: string;
+  }) {
+    const pageNum = Math.max(1, parseInt(query.page || '1'));
+    const limitNum = Math.min(100, Math.max(1, parseInt(query.limit || '20')));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (query.status) where.status = query.status;
+    if (query.category) where.category = query.category;
+    if (query.priority) where.priority = query.priority;
+    if (query.severity) where.severity = query.severity;
+    if (query.tournamentId) where.tournamentId = query.tournamentId;
+
+    const [reports, total] = await Promise.all([
+      prisma.tournamentSupportTicket.findMany({
+        where,
+        skip,
+        take: limitNum,
+        include: {
+          tournament: { select: { id: true, title: true } },
+          reporter: { select: { id: true, email: true, profile: { select: { username: true, avatar: true } } } },
+          targetUser: { select: { id: true, email: true, profile: { select: { username: true, avatar: true } } } },
+          targetTeam: { select: { id: true, team: { select: { name: true } } } },
+          targetResult: { select: { id: true, placement: true, score: true } },
+          reviewedBy: { select: { id: true, email: true, profile: { select: { username: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.tournamentSupportTicket.count({ where }),
+    ]);
+
+    return {
+      reports,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
+  }
+
+  async getAdminReportDetail(reportId: string) {
+    const report = await prisma.tournamentSupportTicket.findUnique({
+      where: { id: reportId },
+      include: {
+        tournament: { select: { id: true, title: true, game: true, status: true, organizerId: true } },
+        reporter: { select: { id: true, email: true, role: true, profile: { select: { username: true, avatar: true } } } },
+        targetUser: { select: { id: true, email: true, role: true, profile: { select: { username: true, avatar: true } } } },
+        targetTeam: { select: { id: true, registrationStatus: true, team: { select: { id: true, name: true } } } },
+        targetResult: { select: { id: true, placement: true, score: true, kills: true, status: true } },
+        reviewedBy: { select: { id: true, email: true, profile: { select: { username: true } } } },
+        messages: {
+          include: {
+            sender: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!report) throw new NotFoundError('Report');
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: { entityId: reportId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    return { report, auditLogs };
+  }
+
+  async updateReportStatus(reportId: string, adminUserId: string, status: string) {
+    const validStatuses = ['OPEN', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'RESOLVED', 'REJECTED', 'DUPLICATE', 'ESCALATED'];
+    if (!validStatuses.includes(status)) {
+      throw new ValidationError({ status: ['Invalid report status'] });
+    }
+
+    const report = await prisma.tournamentSupportTicket.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundError('Report');
+
+    const updated = await prisma.tournamentSupportTicket.update({
+      where: { id: reportId },
+      data: {
+        status,
+        reviewedById: adminUserId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'REPORT_STATUS_CHANGED',
+        entity: 'TournamentSupportTicket',
+        entityId: reportId,
+        userId: adminUserId,
+        metadata: { oldStatus: report.status, newStatus: status },
+      },
+    });
+
+    return updated;
+  }
+
+  async resolveReport(
+    reportId: string,
+    adminUserId: string,
+    data: {
+      status: 'RESOLVED' | 'REJECTED' | 'DUPLICATE';
+      resolutionNote: string;
+      actionTaken?: string;
+    }
+  ) {
+    const ticket = await prisma.tournamentSupportTicket.findUnique({
+      where: { id: reportId },
+      include: { tournament: true, targetResult: true },
+    });
+    if (!ticket) throw new NotFoundError('Report');
+
+    const now = new Date();
+    const actionTaken = data.actionTaken || 'NO_VIOLATION';
+
+    if (actionTaken === 'RESULT_CORRECTED' && ticket.targetResultId && ticket.targetResult) {
+      await prisma.auditLog.create({
+        data: {
+          action: 'RESULT_CORRECTED',
+          entity: 'TournamentResult',
+          entityId: ticket.targetResultId,
+          userId: adminUserId,
+          metadata: {
+            previousPlacement: ticket.targetResult.placement,
+            previousScore: ticket.targetResult.score,
+            previousKills: ticket.targetResult.kills,
+            reason: data.resolutionNote,
+          },
+        },
+      });
+    }
+
+    if ((actionTaken === 'TOURNAMENT_SUSPENDED' || actionTaken === 'TOURNAMENT_CANCELLATION') && ticket.tournamentId) {
+      await prisma.tournament.update({
+        where: { id: ticket.tournamentId },
+        data: { status: TournamentStatus.CANCELLED },
+      });
+      await prisma.auditLog.create({
+        data: {
+          action: 'TOURNAMENT_CANCELLED_BY_MODERATION',
+          entity: 'Tournament',
+          entityId: ticket.tournamentId,
+          userId: adminUserId,
+          metadata: { reportId: ticket.id, reason: data.resolutionNote },
+        },
+      });
+    }
+
+    const updated = await prisma.tournamentSupportTicket.update({
+      where: { id: reportId },
+      data: {
+        status: data.status,
+        resolution: data.resolutionNote,
+        actionTaken,
+        reviewedById: adminUserId,
+        reviewedAt: now,
+        resolvedAt: now,
+      },
+      include: {
+        reporter: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+        targetUser: { select: { id: true, profile: { select: { username: true, avatar: true } } } },
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: `REPORT_${data.status}`,
+        entity: 'TournamentSupportTicket',
+        entityId: reportId,
+        userId: adminUserId,
+        metadata: { status: data.status, actionTaken, resolutionNote: data.resolutionNote },
+      },
+    });
+
+    await notificationService.create({
+      userId: ticket.reporterId,
+      title: 'Report Updated',
+      message: `Your report (${ticket.ticketNumber}) has been reviewed and marked as ${data.status.toLowerCase()}.`,
+      type: 'SYSTEM',
+    });
+
+    return updated;
+  }
+
+  async suspendTournamentByAdmin(tournamentId: string, adminUserId: string, reason: string) {
+    const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (!tournament) throw new NotFoundError('Tournament');
+
+    const updated = await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status: TournamentStatus.CANCELLED },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'TOURNAMENT_SUSPENDED_BY_ADMIN',
+        entity: 'Tournament',
+        entityId: tournamentId,
+        userId: adminUserId,
+        metadata: { reason },
+      },
+    });
+
+    return updated;
+  }
+
+  async blockUser(blockerId: string, blockedId: string) {
+    if (blockerId === blockedId) {
+      throw new ValidationError({ blockedId: ['Cannot block yourself'] });
+    }
+    const target = await prisma.user.findUnique({ where: { id: blockedId } });
+    if (!target) throw new NotFoundError('User');
+
+    const existing = await prisma.userBlock.findUnique({
+      where: { blockerId_blockedId: { blockerId, blockedId } },
+    });
+    if (existing) return existing;
+
+    return prisma.userBlock.create({
+      data: { blockerId, blockedId },
+    });
+  }
+
+  async unblockUser(blockerId: string, blockedId: string) {
+    return prisma.userBlock.deleteMany({
+      where: { blockerId, blockedId },
+    });
   }
 }
 export const tournamentService = new TournamentService();

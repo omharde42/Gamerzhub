@@ -192,6 +192,26 @@ export class TournamentController {
     const history = await tournamentService.getUserTournamentHistory(req.user!.userId);
     sendSuccess(res, history);
   });
+
+  createReport = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const report = await tournamentService.createReport(req.user!.userId, req.body);
+    sendSuccess(res, report, 'Report submitted successfully', 201);
+  });
+
+  getTournamentReports = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const reports = await tournamentService.getTournamentReportsForOrganizer(req.params.id, req.user!.userId);
+    sendSuccess(res, reports);
+  });
+
+  blockUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await tournamentService.blockUser(req.user!.userId, req.body.blockedId);
+    sendSuccess(res, result, 'User blocked successfully', 201);
+  });
+
+  unblockUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await tournamentService.unblockUser(req.user!.userId, req.body.blockedId);
+    sendSuccess(res, result, 'User unblocked successfully');
+  });
 }
 
 export const tournamentController = new TournamentController();

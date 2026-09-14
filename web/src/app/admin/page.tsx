@@ -14,6 +14,7 @@ import {
 import toast from 'react-hot-toast';
 import { formatDate } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { TournamentModerationDashboard } from '@/components/admin/tournament-moderation';
 
 export default function AdminPage() {
   const queryClient = useQueryClient();
@@ -117,6 +118,7 @@ export default function AdminPage() {
               <Badge variant="destructive" className="ml-1 text-[9px] px-1.5 py-0">{pendingPartnerships.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="tournament-moderation" className="gap-1"><Shield className="h-4 w-4" /> Tournament Moderation</TabsTrigger>
         </TabsList>
 
         {/* Game Requests Tab */}
@@ -341,6 +343,9 @@ export default function AdminPage() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+        <TabsContent value="tournament-moderation">
+          <TournamentModerationDashboard />
         </TabsContent>
       </Tabs>
     </div>

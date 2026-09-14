@@ -18,6 +18,7 @@ import {
   matchCredentialsValidation,
   announcementValidation,
   organizerRatingValidation,
+  createReportValidation,
 } from '../validators/tournament';
 
 const router = Router();
@@ -59,6 +60,12 @@ router.get('/user/history', authenticate, tournamentController.getUserHistory.bi
 router.get('/:id/leaderboard', optionalAuth, tournamentController.getLeaderboard.bind(tournamentController));
 router.post('/:id/results', authenticate, tournamentController.saveResults.bind(tournamentController));
 router.post('/:id/results/finalize', authenticate, tournamentController.finalizeResults.bind(tournamentController));
+
+// Phase 6 Reporting & User Safety Routes
+router.post('/reports', authenticate, createReportValidation, validate, tournamentController.createReport.bind(tournamentController));
+router.get('/:id/reports', authenticate, tournamentIdParamValidation, validate, tournamentController.getTournamentReports.bind(tournamentController));
+router.post('/users/block', authenticate, tournamentController.blockUser.bind(tournamentController));
+router.post('/users/unblock', authenticate, tournamentController.unblockUser.bind(tournamentController));
 
 export default router;
 
