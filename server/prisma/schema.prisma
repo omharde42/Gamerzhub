@@ -95,6 +95,15 @@ model User {
   freeFireRequestsReceived FreeFireTeammateRequest[] @relation("FreeFireRequestsReceived")
   freeFireRatingsGiven FreeFireSessionRating[] @relation("FreeFireRatingsGiven")
   freeFireRatingsReceived FreeFireSessionRating[] @relation("FreeFireRatingsReceived")
+
+  // Canonical 15-Game Architecture Relations
+  gameProfiles        GameProfile[]
+  createdGameSessions GameSession[]             @relation("GameSessionHost")
+  gameJoinRequestsSent GameJoinRequest[]        @relation("GameJoinRequestsSent")
+  gameJoinRequestsReceived GameJoinRequest[]    @relation("GameJoinRequestsReceived")
+  gameSessionMemberships GameSessionParticipant[]
+  gameRatingsGiven    GameSessionRating[]       @relation("GameRatingsGiven")
+  gameRatingsReceived GameSessionRating[]       @relation("GameRatingsReceived")
   profileViews        ProfileView[]
   postViews           PostView[]
   chatMessageReactions ChatMessageReaction[]
@@ -1556,6 +1565,123 @@ model FreeFireSessionRating {
   createdAt    DateTime @default(now())
 
   @@unique([raterId, ratedUserId])
+  @@index([raterId])
+  @@index([ratedUserId])
+}
+
+// ─── Canonical 15-Game Universal Models ─────────────────────────────────────
+
+enum GameJoinRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+enum GameSessionStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model GameProfile {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameId              String   // e.g. bgmi, pubgmobile, clashofclans, freefiremax, etc.
+  identityData        Json     // Stores inGameName, characterId, playerTag, etc.
+  rank                String?
+  playstyle           String?
+  language            String   @default("ENGLISH")
+  micPreference       Boolean  @default(true)
+  availability        String   @default("EVENING")
+  isVerified          Boolean  @default(false)
+  identityType        String   @default("SELF_REPORTED") // SELF_REPORTED | OFFICIAL_API
+  reputationScore     Float    @default(5.0)
+  completedSessions   Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@index([gameId])
+  @@index([rank])
+  @@index([playstyle])
+  @@index([reputationScore])
+}
+
+model GameSession {
+  id               String            @id @default(uuid())
+  gameId           String
+  hostId           String
+  host             User              @relation("GameSessionHost", fields: [hostId], references: [id], onDelete: Cascade)
+  mode             String
+  title            String?
+  roomCode         String?
+  roomPassword     String?
+  joinUrl          String?
+  status           GameSessionStatus @default(OPEN)
+  maxParticipants  Int               @default(4)
+  participants     GameSessionParticipant[]
+  joinRequests     GameJoinRequest[]
+  ratings          GameSessionRating[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([gameId])
+  @@index([hostId])
+  @@index([status])
+}
+
+model GameSessionParticipant {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime    @default(now())
+
+  @@unique([sessionId, userId])
+  @@index([sessionId])
+  @@index([userId])
+}
+
+model GameJoinRequest {
+  id         String                @id @default(uuid())
+  sessionId  String
+  session    GameSession           @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User                  @relation("GameJoinRequestsSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User                  @relation("GameJoinRequestsReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  status     GameJoinRequestStatus @default(PENDING)
+  message    String?
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  @@unique([sessionId, senderId, status])
+  @@index([sessionId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model GameSessionRating {
+  id           String      @id @default(uuid())
+  sessionId    String
+  session      GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  raterId      String
+  rater        User        @relation("GameRatingsGiven", fields: [raterId], references: [id], onDelete: Cascade)
+  ratedUserId  String
+  ratedUser    User        @relation("GameRatingsReceived", fields: [ratedUserId], references: [id], onDelete: Cascade)
+  rating       Int         // 1 to 5
+  feedback     String?
+  createdAt    DateTime    @default(now())
+
+  @@unique([sessionId, raterId, ratedUserId])
+  @@index([sessionId])
   @@index([raterId])
   @@index([ratedUserId])
 }

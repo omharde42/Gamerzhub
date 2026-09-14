@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { AppError } from '../utils/errors';
+import { gameAdapterService } from './game-adapter.service';
 
 export interface FreeFireProfileInput {
   freeFireUid?: string;
@@ -74,10 +75,10 @@ export class FreeFireService {
   }
 
   /**
-   * Upsert Free Fire profile information
+   * Upsert Free Fire profile information and sync to canonical GameProfile
    */
   async updateProfile(userId: string, data: FreeFireProfileInput) {
-    return (prisma as any).freeFireProfile.upsert({
+    const freeFireProf = await (prisma as any).freeFireProfile.upsert({
       where: { userId },
       create: {
         userId,
@@ -105,6 +106,21 @@ export class FreeFireService {
         isVerified: false, // Ensure users cannot self-set verified
       },
     });
+
+    // Also sync to canonical GameProfile for 15-game adapter compatibility
+    await gameAdapterService.upsertGameProfile(userId, 'freefiremax', {
+      identityData: {
+        uid: data.freeFireUid || '',
+        inGameName: data.freeFireUsername || '',
+      },
+      rank: data.rank,
+      playstyle: data.playstyle,
+      language: data.language,
+      micPreference: data.micPreference,
+      availability: data.availability,
+    }).catch(() => {});
+
+    return freeFireProf;
   }
 
   /**
@@ -155,6 +171,10 @@ export class FreeFireService {
   calculateCompatibility(userA: any, userB: any) {
     let score = 50; // Base score
     const reasons: string[] = [];
+
+    if (!userA || !userB) {
+      return { score: 50, reasons: ['General Free Fire Gamer'] };
+    }
 
     // Language match (+20)
     if (userA.language && userB.language && userA.language.toUpperCase() === userB.language.toUpperCase()) {
