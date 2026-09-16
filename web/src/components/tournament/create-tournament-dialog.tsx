@@ -20,41 +20,23 @@ interface CreateTournamentDialogProps {
 
 const GAME_PRESETS = [
   {
-    name: 'PUBG Mobile / BGMI',
-    gameKey: 'PUBG Mobile',
-    maps: ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Nusa'],
-    defaultCapacity: 24,
-  },
-  {
-    name: 'PUBG PC',
-    gameKey: 'PUBG PC',
-    maps: ['Erangel', 'Miramar', 'Taego', 'Vikendi', 'Rondo'],
-    defaultCapacity: 16,
-  },
-  {
-    name: 'Free Fire MAX',
-    gameKey: 'Free Fire MAX',
+    name: 'Free Fire',
+    gameKey: 'Free Fire',
     maps: ['Bermuda', 'Kalahari', 'Purgatory', 'Alpine', 'NeXTerra'],
     defaultCapacity: 48,
   },
   {
-    name: 'Valorant',
-    gameKey: 'Valorant',
-    maps: ['Ascent', 'Bind', 'Haven', 'Split', 'Lotus', 'Sunset'],
-    defaultCapacity: 16,
-  },
-  {
-    name: 'CS2',
-    gameKey: 'CS2',
-    maps: ['Dust II', 'Mirage', 'Inferno', 'Nuke', 'Ancient', 'Anubis'],
-    defaultCapacity: 16,
+    name: 'PUBG',
+    gameKey: 'PUBG',
+    maps: ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Rondo'],
+    defaultCapacity: 24,
   },
 ];
 
 export function CreateTournamentDialog({ open, onOpenChange, onSuccess }: CreateTournamentDialogProps) {
   const queryClient = useQueryClient();
 
-  const [game, setGame] = useState('PUBG Mobile');
+  const [game, setGame] = useState('Free Fire');
   const [formatMode, setFormatMode] = useState<'SOLO' | 'DUO' | 'SQUAD'>('SQUAD');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

@@ -127,11 +127,8 @@ export default function TournamentsPage() {
           </SelectTrigger>
           <SelectContent className="glass-popup border-emerald-500/30">
             <SelectItem value="">All Games</SelectItem>
-            <SelectItem value="Valorant">Valorant</SelectItem>
-            <SelectItem value="CS2">CS2</SelectItem>
-            <SelectItem value="League of Legends">League of Legends</SelectItem>
-            <SelectItem value="Smash">Super Smash Bros.</SelectItem>
-            <SelectItem value="Rocket League">Rocket League</SelectItem>
+            <SelectItem value="Free Fire">Free Fire</SelectItem>
+            <SelectItem value="PUBG">PUBG</SelectItem>
           </SelectContent>
         </Select>
       </div>

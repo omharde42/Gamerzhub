@@ -21,7 +21,7 @@ export default function CreateTournamentPage() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    game: 'Valorant',
+    game: 'Free Fire',
     format: 'SINGLE_ELIMINATION',
     maxTeams: 16,
     prizePool: 500,
@@ -110,12 +110,8 @@ export default function CreateTournamentPage() {
                       <SelectValue placeholder="Select Game" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Valorant">Valorant</SelectItem>
-                      <SelectItem value="CS2">Counter-Strike 2</SelectItem>
-                      <SelectItem value="League of Legends">League of Legends</SelectItem>
-                      <SelectItem value="Apex Legends">Apex Legends</SelectItem>
-                      <SelectItem value="Dota 2">Dota 2</SelectItem>
-                      <SelectItem value="Rocket League">Rocket League</SelectItem>
+                      <SelectItem value="Free Fire">Free Fire</SelectItem>
+                      <SelectItem value="PUBG">PUBG</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
