@@ -70,7 +70,7 @@ export class TournamentService {
         endDate: endDate ? new Date(endDate) : undefined,
         registrationEnd: registrationEnd ? new Date(registrationEnd) : undefined,
         organizerId,
-        status: status || TournamentStatus.DRAFT,
+        status: status || TournamentStatus.REGISTRATION_OPEN,
       },
     });
   }

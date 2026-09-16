@@ -47,6 +47,7 @@ export default function CreateTournamentPage() {
         prizePool: Number(formData.prizePool),
         startDate: new Date(formData.startDate).toISOString(),
         rules: formData.rules.trim(),
+        status: 'REGISTRATION_OPEN',
       });
 
       toast.success('Tournament created successfully!');
