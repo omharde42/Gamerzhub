@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trophy, Search, Users, Calendar, Clock, ExternalLink, AlertCircle, Shield } from 'lucide-react';
+import { Trophy, Search, Users, Calendar, Clock, ExternalLink, AlertCircle, Shield, Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -56,6 +56,12 @@ export default function TournamentsPage() {
             Explore live and upcoming competitive esports tournaments powered by GamerZ Hub & Challonge.
           </p>
         </div>
+        <Link href="/tournaments/create">
+          <Button variant="gradient" className="gap-2 h-10 px-5 text-xs font-extrabold rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-emerald-500/20">
+            <Plus className="h-4 w-4" />
+            Host / Create Tournament
+          </Button>
+        </Link>
       </div>
 
       {/* Status Filter Tabs */}
