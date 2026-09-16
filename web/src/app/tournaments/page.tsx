@@ -46,23 +46,52 @@ export default function TournamentsPage() {
   return (
     <div className="space-y-6 overflow-x-hidden max-w-full">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            <Trophy className="h-6 w-6 text-amber-400" />
-            Tournament Discovery & Arena Leagues
-          </h1>
-          <p className="text-xs text-muted-foreground">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-xl sm:text-2xl font-extrabold text-foreground flex items-center gap-2">
+              <Trophy className="h-6 w-6 text-amber-400 shrink-0" />
+              Tournament Discovery & Arena Leagues
+            </h1>
+            <Link href="/tournaments/create" className="sm:hidden shrink-0">
+              <Button size="sm" variant="gradient" className="gap-1.5 text-xs font-bold rounded-xl px-3 py-1.5 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
+                <Plus className="h-3.5 w-3.5" /> Create
+              </Button>
+            </Link>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
             Explore live and upcoming competitive esports tournaments powered by GamerZ Hub & Challonge.
           </p>
         </div>
-        <Link href="/tournaments/create">
+
+        <Link href="/tournaments/create" className="hidden sm:block shrink-0">
           <Button variant="gradient" className="gap-2 h-10 px-5 text-xs font-extrabold rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg hover:shadow-emerald-500/20">
             <Plus className="h-4 w-4" />
             Host / Create Tournament
           </Button>
         </Link>
       </div>
+
+      {/* Host Your Tournament Banner Card */}
+      <Card variant="glass" className="p-4 sm:p-5 rounded-[26px] bg-gradient-to-r from-emerald-950/40 via-teal-950/30 to-slate-900/60 border-emerald-500/30">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-[10px] font-mono font-bold px-2.5 py-0.5">
+              ⚡ ORGANIZER HUB
+            </Badge>
+            <h2 className="text-sm sm:text-base font-extrabold text-foreground">Want to Host Your Own Tournament?</h2>
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Create custom brackets, set up check-ins, manage team approvals, release private match room credentials, and award leaderboard points.
+            </p>
+          </div>
+          <Link href="/tournaments/create" className="w-full sm:w-auto shrink-0">
+            <Button variant="gradient" className="w-full sm:w-auto gap-2 h-9 px-5 text-xs font-extrabold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
+              <Plus className="h-4 w-4" />
+              Create Tournament
+            </Button>
+          </Link>
+        </div>
+      </Card>
 
       {/* Status Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
