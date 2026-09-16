@@ -106,20 +106,29 @@ export class TournamentService {
       select: { id: true },
     });
     if (owned) return owned.id;
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { profile: { select: { username: true } }, email: true },
     });
     const username = user?.profile?.username || user?.email?.split('@')[0] || 'user';
-    const slugBase = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    const org = await prisma.organization.create({
-      data: {
-        name: `${username}'s Organization`,
-        slug: `${slugBase}-org-${userId.slice(0, 8)}`,
-        ownerId: userId,
-      },
-    });
-    return org.id;
+    const slugBase = username.toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'user';
+    const uniqueSuffix = `${userId.slice(0, 8)}-${Math.random().toString(36).slice(2, 6)}`;
+
+    try {
+      const org = await prisma.organization.create({
+        data: {
+          name: `${username}'s Organization (${uniqueSuffix})`,
+          slug: `${slugBase}-org-${uniqueSuffix}`,
+          ownerId: userId,
+        },
+      });
+      return org.id;
+    } catch (e) {
+      const fallback = await prisma.organization.findFirst({ where: { ownerId: userId }, select: { id: true } });
+      if (fallback) return fallback.id;
+      throw e;
+    }
   }
 
   /** True when the user owns/admins/moderates the org running the tournament. */

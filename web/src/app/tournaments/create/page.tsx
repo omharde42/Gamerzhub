@@ -54,8 +54,13 @@ export default function CreateTournamentPage() {
       fireCelebration('Tournament published!', 'The arena is open — players can now register.');
       router.push(`/tournaments/${data.data?.id || ''}`);
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to create tournament';
-      toast.error(msg);
+      if (err.response?.status === 401) {
+        toast.error('Please sign in to create a tournament.');
+        router.push('/auth/login?redirect=/tournaments/create');
+      } else {
+        const msg = err.response?.data?.message || err.message || 'Failed to create tournament';
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
