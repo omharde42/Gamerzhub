@@ -1,6 +1,6 @@
 # 🎮 GAMERZHUB
 
-> Connect. Compete. Level Up.
+> Connect. Compete. Level Up
 
 GAMERZHUB is an all-in-one social networking platform built exclusively for gamers. It combines networking, tournaments, recruitment, AI-powered recommendations, communities, messaging, analytics, and esports career opportunities into one modern ecosystem.
 
