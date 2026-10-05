@@ -120,8 +120,15 @@ export class AuthController {
   });
 
   googleLogin = asyncHandler(async (req: Request, res: Response) => {
-    const { email, displayName, avatar, googleId } = req.body;
-    const result = await authService.directGoogleLogin(email, displayName, avatar, googleId);
+    const { email, displayName, avatar, googleId, token, access_token, id_token } = req.body;
+    const result = await authService.directGoogleLogin({
+      email,
+      displayName,
+      avatarUrl: avatar,
+      googleId,
+      token: token || access_token,
+      idToken: id_token,
+    });
     sendSuccess(res, result, 'Logged in with Google successfully!');
   });
 

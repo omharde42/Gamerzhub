@@ -260,8 +260,63 @@ export class AuthService {
     };
   }
 
-  async directGoogleLogin(email: string, displayName: string, avatarUrl: string, googleId: string) {
-    if (!email) throw new ValidationError({ email: ['Email is required'] });
+  async directGoogleLogin(
+    params:
+      | {
+          email?: string;
+          displayName?: string;
+          avatarUrl?: string;
+          googleId?: string;
+          token?: string;
+          idToken?: string;
+        }
+      | string,
+    displayNameArg?: string,
+    avatarUrlArg?: string,
+    googleIdArg?: string
+  ) {
+    let email = typeof params === 'string' ? params : params.email;
+    let displayName = typeof params === 'string' ? displayNameArg : params.displayName;
+    let avatarUrl = typeof params === 'string' ? avatarUrlArg : params.avatarUrl;
+    let googleId = typeof params === 'string' ? googleIdArg : params.googleId;
+    const token = typeof params === 'object' ? params.token : undefined;
+    const idToken = typeof params === 'object' ? params.idToken : undefined;
+
+    // Server-side verification of Google Token if email is missing or token is provided
+    if ((!email || !googleId) && (token || idToken)) {
+      try {
+        if (token) {
+          const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (userinfoRes.ok) {
+            const userinfo = (await userinfoRes.json()) as any;
+            if (userinfo.email) {
+              email = userinfo.email;
+              googleId = userinfo.sub || googleId;
+              displayName = userinfo.name || displayName || email!.split('@')[0];
+              avatarUrl = userinfo.picture || avatarUrl || null;
+            }
+          }
+        }
+        if (!email && idToken) {
+          const tokeninfoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+          if (tokeninfoRes.ok) {
+            const tokeninfo = (await tokeninfoRes.json()) as any;
+            if (tokeninfo.email) {
+              email = tokeninfo.email;
+              googleId = tokeninfo.sub || googleId;
+              displayName = tokeninfo.name || displayName || email!.split('@')[0];
+              avatarUrl = tokeninfo.picture || avatarUrl || null;
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Server Google Token Verification Error]:', err);
+      }
+    }
+
+    if (!email) throw new ValidationError({ email: ['Google authentication failed: Email is required'] });
 
     const account = await prisma.account.findUnique({
       where: {
