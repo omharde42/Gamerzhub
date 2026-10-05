@@ -53,16 +53,27 @@ function AuthCallbackContent() {
 
     const processSession = async () => {
       try {
-        // 1. Hash parameters from Backend OAuth redirects (#accessToken=...)
+        // A. Extract credentials from URL Fragment (#access_token=... or #accessToken=...)
+        let hashAccess: string | null = null;
+        let hashRefresh: string | null = null;
+        let googleAccessToken: string | null = null;
+        let googleIdToken: string | null = null;
+
         if (typeof window !== 'undefined' && window.location.hash) {
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const hashAccess = hashParams.get('accessToken');
-          const hashRefresh = hashParams.get('refreshToken');
-          if (hashAccess && hashRefresh) {
-            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
-            await verifyAndLogin(hashAccess, hashRefresh);
-            return;
-          }
+          hashAccess = hashParams.get('accessToken');
+          hashRefresh = hashParams.get('refreshToken');
+          googleAccessToken = hashParams.get('access_token');
+          googleIdToken = hashParams.get('id_token');
+
+          // Clean sensitive tokens from URL fragment immediately
+          window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+        }
+
+        // 1. Hash parameters from Backend OAuth redirects (#accessToken=...)
+        if (hashAccess && hashRefresh) {
+          await verifyAndLogin(hashAccess, hashRefresh);
+          return;
         }
 
         // 2. Legacy query parameters (kept for backward compatibility)
@@ -94,54 +105,45 @@ function AuthCallbackContent() {
         }
 
         // 4. Hash parameters from Direct Google OAuth (#access_token=... or #id_token=...)
-        if (typeof window !== 'undefined' && window.location.hash) {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          const googleAccessToken = hashParams.get('access_token');
-          const googleIdToken = hashParams.get('id_token');
-
-          if (googleAccessToken || googleIdToken) {
-            // Clean sensitive tokens from URL fragment immediately
-            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
-
-            try {
-              let userInfo: any = null;
-              if (googleAccessToken) {
-                try {
-                  const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { Authorization: `Bearer ${googleAccessToken}` },
-                  });
-                  if (userInfoRes.ok) {
-                    userInfo = await userInfoRes.json();
-                  }
-                } catch (fetchErr) {
-                  console.warn('Browser Google UserInfo fetch skipped, delegating to server:', fetchErr);
+        if (googleAccessToken || googleIdToken) {
+          try {
+            let userInfo: any = null;
+            if (googleAccessToken) {
+              try {
+                const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${googleAccessToken}` },
+                });
+                if (userInfoRes.ok) {
+                  userInfo = await userInfoRes.json();
                 }
+              } catch (fetchErr) {
+                console.warn('Google UserInfo client fetch skipped, delegating to server:', fetchErr);
               }
-
-              const { data } = await api.post('/auth/google', {
-                email: userInfo?.email || undefined,
-                displayName: userInfo?.name || (userInfo?.email ? userInfo.email.split('@')[0] : undefined),
-                avatar: userInfo?.picture || null,
-                googleId: userInfo?.sub || undefined,
-                token: googleAccessToken || undefined,
-                access_token: googleAccessToken || undefined,
-                id_token: googleIdToken || undefined,
-              });
-
-              login(data.data.user, data.data.accessToken, data.data.refreshToken);
-              if (isSubscribed) {
-                setStatus('success');
-                setTimeout(() => router.push('/feed'), 1000);
-              }
-              return;
-            } catch (googleErr: any) {
-              console.error('Google OAuth backend validation failed:', googleErr);
-              if (isSubscribed) {
-                setStatus('error');
-                setError(googleErr.response?.data?.message || googleErr.message || 'Google authentication failed');
-              }
-              return;
             }
+
+            const { data } = await api.post('/auth/google', {
+              email: userInfo?.email || undefined,
+              displayName: userInfo?.name || (userInfo?.email ? userInfo.email.split('@')[0] : undefined),
+              avatar: userInfo?.picture || null,
+              googleId: userInfo?.sub || undefined,
+              token: googleAccessToken || undefined,
+              access_token: googleAccessToken || undefined,
+              id_token: googleIdToken || undefined,
+            });
+
+            login(data.data.user, data.data.accessToken, data.data.refreshToken);
+            if (isSubscribed) {
+              setStatus('success');
+              setTimeout(() => router.push('/feed'), 1000);
+            }
+            return;
+          } catch (googleErr: any) {
+            console.error('Google OAuth backend validation failed:', googleErr);
+            if (isSubscribed) {
+              setStatus('error');
+              setError(googleErr.response?.data?.message || googleErr.message || 'Google authentication failed');
+            }
+            return;
           }
         }
 
@@ -182,13 +184,13 @@ function AuthCallbackContent() {
           }
         });
 
-        // 7. Fallback timer if no credentials or provider found
+        // 7. Fallback timer: ONLY runs if NO credentials or tokens were found in the URL at all
         const timer = setTimeout(() => {
           if (isSubscribed && statusRef.current === 'loading') {
             setStatus('error');
-            setError('Authentication cancelled or session expired. Please try signing in again.');
+            setError('No authentication credentials found. Please try signing in again.');
           }
-        }, 4000);
+        }, 8000);
 
         return () => {
           authListener.subscription.unsubscribe();
