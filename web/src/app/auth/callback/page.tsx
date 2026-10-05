@@ -54,13 +54,12 @@ function AuthCallbackContent() {
     const processSession = async () => {
       try {
         // 1. Hash parameters from Backend OAuth redirects (#accessToken=...)
-        //    Tokens live in the fragment, not the query string, so they never
-        //    reach server logs, browser history, or Referer headers.
         if (typeof window !== 'undefined' && window.location.hash) {
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
           const hashAccess = hashParams.get('accessToken');
           const hashRefresh = hashParams.get('refreshToken');
           if (hashAccess && hashRefresh) {
+            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
             await verifyAndLogin(hashAccess, hashRefresh);
             return;
           }
@@ -74,35 +73,79 @@ function AuthCallbackContent() {
           return;
         }
 
-        // 3. Hash parameters from Direct Google OAuth (#access_token=...)
+        // 3. Google OAuth Code Parameter (?code=...)
+        const code = searchParams.get('code');
+        if (code) {
+          try {
+            const { data } = await api.post('/auth/google', { code });
+            login(data.data.user, data.data.accessToken, data.data.refreshToken);
+            if (isSubscribed) {
+              setStatus('success');
+              setTimeout(() => router.push('/feed'), 1000);
+            }
+            return;
+          } catch (codeErr: any) {
+            if (isSubscribed) {
+              setStatus('error');
+              setError(codeErr.response?.data?.message || codeErr.message || 'Google authentication failed');
+            }
+            return;
+          }
+        }
+
+        // 4. Hash parameters from Direct Google OAuth (#access_token=... or #id_token=...)
         if (typeof window !== 'undefined' && window.location.hash) {
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
           const googleAccessToken = hashParams.get('access_token');
-          if (googleAccessToken) {
+          const googleIdToken = hashParams.get('id_token');
+
+          if (googleAccessToken || googleIdToken) {
+            // Clean sensitive tokens from URL fragment immediately
+            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+
             try {
-              const userInfoRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${googleAccessToken}`);
-              const userInfo = await userInfoRes.json();
-              if (userInfo.email) {
-                const { data } = await api.post('/auth/google', {
-                  email: userInfo.email,
-                  displayName: userInfo.name || userInfo.email.split('@')[0],
-                  avatar: userInfo.picture || null,
-                  googleId: userInfo.sub,
-                });
-                login(data.data.user, data.data.accessToken, data.data.refreshToken);
-                if (isSubscribed) {
-                  setStatus('success');
-                  setTimeout(() => router.push('/feed'), 1000);
+              let userInfo: any = null;
+              if (googleAccessToken) {
+                try {
+                  const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${googleAccessToken}` },
+                  });
+                  if (userInfoRes.ok) {
+                    userInfo = await userInfoRes.json();
+                  }
+                } catch (fetchErr) {
+                  console.warn('Browser Google UserInfo fetch skipped, delegating to server:', fetchErr);
                 }
-                return;
               }
-            } catch (googleErr) {
-              console.warn('Google userinfo fetch failed:', googleErr);
+
+              const { data } = await api.post('/auth/google', {
+                email: userInfo?.email || undefined,
+                displayName: userInfo?.name || (userInfo?.email ? userInfo.email.split('@')[0] : undefined),
+                avatar: userInfo?.picture || null,
+                googleId: userInfo?.sub || undefined,
+                token: googleAccessToken || undefined,
+                access_token: googleAccessToken || undefined,
+                id_token: googleIdToken || undefined,
+              });
+
+              login(data.data.user, data.data.accessToken, data.data.refreshToken);
+              if (isSubscribed) {
+                setStatus('success');
+                setTimeout(() => router.push('/feed'), 1000);
+              }
+              return;
+            } catch (googleErr: any) {
+              console.error('Google OAuth backend validation failed:', googleErr);
+              if (isSubscribed) {
+                setStatus('error');
+                setError(googleErr.response?.data?.message || googleErr.message || 'Google authentication failed');
+              }
+              return;
             }
           }
         }
 
-        // 4. Supabase Auth session (Google / Discord via Supabase)
+        // 5. Supabase Auth session (Google / Discord via Supabase)
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.access_token) {
           const provider = session.user?.app_metadata?.provider || 'google';
@@ -119,7 +162,7 @@ function AuthCallbackContent() {
           return;
         }
 
-        // 5. Supabase auth state listener fallback if session hydration takes a moment
+        // 6. Supabase auth state listener fallback
         const { data: authListener } = supabase.auth.onAuthStateChange(async (_event: any, newSession: any) => {
           if (newSession && newSession.access_token && isSubscribed) {
             try {
@@ -139,13 +182,13 @@ function AuthCallbackContent() {
           }
         });
 
-        // 5. Fallback timer if no credentials found
+        // 7. Fallback timer if no credentials or provider found
         const timer = setTimeout(() => {
           if (isSubscribed && statusRef.current === 'loading') {
             setStatus('error');
             setError('Authentication cancelled or session expired. Please try signing in again.');
           }
-        }, 3500);
+        }, 4000);
 
         return () => {
           authListener.subscription.unsubscribe();
