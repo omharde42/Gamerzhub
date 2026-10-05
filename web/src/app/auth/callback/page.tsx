@@ -7,29 +7,69 @@ import { useAuthStore } from '@/store/authStore';
 import api from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 
+interface AuthCredentials {
+  hashAccess: string | null;
+  hashRefresh: string | null;
+  googleAccessToken: string | null;
+  googleIdToken: string | null;
+  queryAccess: string | null;
+  queryRefresh: string | null;
+  code: string | null;
+  errorParam: string | null;
+}
+
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuthStore();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [error, setError] = useState('');
-  // Mirror `status` in a ref so the 3.5s fallback timer can read the latest
-  // value. Adding `status` itself to the auth effect's deps would restart
-  // OAuth/session processing every time it changes.
-  const statusRef = useRef(status);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
+
+  const isProcessingRef = useRef(false);
+  const credentialsRef = useRef<AuthCredentials | null>(null);
+
+  // Synchronously extract credentials on initial render before any re-renders or replaceState calls
+  if (credentialsRef.current === null && typeof window !== 'undefined') {
+    let hashAccess: string | null = null;
+    let hashRefresh: string | null = null;
+    let googleAccessToken: string | null = null;
+    let googleIdToken: string | null = null;
+
+    if (window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      hashAccess = hashParams.get('accessToken');
+      hashRefresh = hashParams.get('refreshToken');
+      googleAccessToken = hashParams.get('access_token');
+      googleIdToken = hashParams.get('id_token');
+    }
+
+    credentialsRef.current = {
+      hashAccess,
+      hashRefresh,
+      googleAccessToken,
+      googleIdToken,
+      queryAccess: searchParams.get('accessToken'),
+      queryRefresh: searchParams.get('refreshToken'),
+      code: searchParams.get('code'),
+      errorParam: searchParams.get('error'),
+    };
+  }
 
   useEffect(() => {
-    let isSubscribed = true;
+    if (isProcessingRef.current) return;
+    isProcessingRef.current = true;
 
-    const errorParam = searchParams.get('error');
-    if (errorParam) {
-      if (isSubscribed) {
-        setStatus('error');
-        setError(decodeURIComponent(errorParam));
-      }
+    const credentials = credentialsRef.current;
+    if (!credentials) return;
+
+    // Clean URL fragment immediately to remove sensitive tokens from address bar
+    if (typeof window !== 'undefined' && window.location.hash) {
+      window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+    }
+
+    if (credentials.errorParam) {
+      setStatus('error');
+      setError(decodeURIComponent(credentials.errorParam));
       return;
     }
 
@@ -39,79 +79,51 @@ function AuthCallbackContent() {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         login(data.data, accessToken, refreshToken);
-        if (isSubscribed) {
-          setStatus('success');
-          setTimeout(() => router.push('/feed'), 1000);
-        }
-      } catch {
-        if (isSubscribed) {
-          setStatus('error');
-          setError('Failed to verify user session after social login.');
-        }
+        setStatus('success');
+        setTimeout(() => router.push('/feed'), 1000);
+      } catch (err: any) {
+        setStatus('error');
+        setError('Failed to verify user session after social login.');
       }
     };
 
     const processSession = async () => {
       try {
-        // A. Extract credentials from URL Fragment (#access_token=... or #accessToken=...)
-        let hashAccess: string | null = null;
-        let hashRefresh: string | null = null;
-        let googleAccessToken: string | null = null;
-        let googleIdToken: string | null = null;
-
-        if (typeof window !== 'undefined' && window.location.hash) {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
-          hashAccess = hashParams.get('accessToken');
-          hashRefresh = hashParams.get('refreshToken');
-          googleAccessToken = hashParams.get('access_token');
-          googleIdToken = hashParams.get('id_token');
-
-          // Clean sensitive tokens from URL fragment immediately
-          window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
-        }
-
         // 1. Hash parameters from Backend OAuth redirects (#accessToken=...)
-        if (hashAccess && hashRefresh) {
-          await verifyAndLogin(hashAccess, hashRefresh);
+        if (credentials.hashAccess && credentials.hashRefresh) {
+          await verifyAndLogin(credentials.hashAccess, credentials.hashRefresh);
           return;
         }
 
-        // 2. Legacy query parameters (kept for backward compatibility)
-        const queryAccess = searchParams.get('accessToken');
-        const queryRefresh = searchParams.get('refreshToken');
-        if (queryAccess && queryRefresh) {
-          await verifyAndLogin(queryAccess, queryRefresh);
+        // 2. Query parameters (accessToken & refreshToken)
+        if (credentials.queryAccess && credentials.queryRefresh) {
+          await verifyAndLogin(credentials.queryAccess, credentials.queryRefresh);
           return;
         }
 
         // 3. Google OAuth Code Parameter (?code=...)
-        const code = searchParams.get('code');
-        if (code) {
+        if (credentials.code) {
           try {
-            const { data } = await api.post('/auth/google', { code });
+            const { data } = await api.post('/auth/google', { code: credentials.code });
             login(data.data.user, data.data.accessToken, data.data.refreshToken);
-            if (isSubscribed) {
-              setStatus('success');
-              setTimeout(() => router.push('/feed'), 1000);
-            }
+            setStatus('success');
+            setTimeout(() => router.push('/feed'), 1000);
             return;
           } catch (codeErr: any) {
-            if (isSubscribed) {
-              setStatus('error');
-              setError(codeErr.response?.data?.message || codeErr.message || 'Google authentication failed');
-            }
+            setStatus('error');
+            setError(codeErr.response?.data?.message || codeErr.message || 'Google authentication failed');
             return;
           }
         }
 
         // 4. Hash parameters from Direct Google OAuth (#access_token=... or #id_token=...)
-        if (googleAccessToken || googleIdToken) {
+        if (credentials.googleAccessToken || credentials.googleIdToken) {
           try {
             let userInfo: any = null;
-            if (googleAccessToken) {
+            if (credentials.googleAccessToken) {
               try {
                 const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${googleAccessToken}` },
+                  headers: { Authorization: `Bearer ${credentials.googleAccessToken}` },
                 });
                 if (userInfoRes.ok) {
                   userInfo = await userInfoRes.json();
@@ -126,23 +138,19 @@ function AuthCallbackContent() {
               displayName: userInfo?.name || (userInfo?.email ? userInfo.email.split('@')[0] : undefined),
               avatar: userInfo?.picture || null,
               googleId: userInfo?.sub || undefined,
-              token: googleAccessToken || undefined,
-              access_token: googleAccessToken || undefined,
-              id_token: googleIdToken || undefined,
+              token: credentials.googleAccessToken || undefined,
+              access_token: credentials.googleAccessToken || undefined,
+              id_token: credentials.googleIdToken || undefined,
             });
 
             login(data.data.user, data.data.accessToken, data.data.refreshToken);
-            if (isSubscribed) {
-              setStatus('success');
-              setTimeout(() => router.push('/feed'), 1000);
-            }
+            setStatus('success');
+            setTimeout(() => router.push('/feed'), 1000);
             return;
           } catch (googleErr: any) {
             console.error('Google OAuth backend validation failed:', googleErr);
-            if (isSubscribed) {
-              setStatus('error');
-              setError(googleErr.response?.data?.message || googleErr.message || 'Google authentication failed');
-            }
+            setStatus('error');
+            setError(googleErr.response?.data?.message || googleErr.message || 'Google authentication failed');
             return;
           }
         }
@@ -157,16 +165,14 @@ function AuthCallbackContent() {
           });
 
           login(data.data.user, data.data.accessToken, data.data.refreshToken);
-          if (isSubscribed) {
-            setStatus('success');
-            setTimeout(() => router.push('/feed'), 1000);
-          }
+          setStatus('success');
+          setTimeout(() => router.push('/feed'), 1000);
           return;
         }
 
         // 6. Supabase auth state listener fallback
         const { data: authListener } = supabase.auth.onAuthStateChange(async (_event: any, newSession: any) => {
-          if (newSession && newSession.access_token && isSubscribed) {
+          if (newSession && newSession.access_token) {
             try {
               const provider = newSession.user?.app_metadata?.provider || 'google';
               const { data } = await api.post('/auth/social-login', {
@@ -186,10 +192,8 @@ function AuthCallbackContent() {
 
         // 7. Fallback timer: ONLY runs if NO credentials or tokens were found in the URL at all
         const timer = setTimeout(() => {
-          if (isSubscribed && statusRef.current === 'loading') {
-            setStatus('error');
-            setError('No authentication credentials found. Please try signing in again.');
-          }
+          setStatus((prev) => (prev === 'loading' ? 'error' : prev));
+          setError((prevErr) => prevErr || 'No authentication credentials found. Please try signing in again.');
         }, 8000);
 
         return () => {
@@ -197,19 +201,13 @@ function AuthCallbackContent() {
           clearTimeout(timer);
         };
       } catch (err: any) {
-        if (isSubscribed) {
-          setStatus('error');
-          setError(err.response?.data?.message || err.message || 'Authentication exchange failed');
-        }
+        setStatus('error');
+        setError(err.response?.data?.message || err.message || 'Authentication exchange failed');
       }
     };
 
     processSession();
-
-    return () => {
-      isSubscribed = false;
-    };
-  }, [searchParams, login, router]);
+  }, [login, router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background via-background to-background/95">
