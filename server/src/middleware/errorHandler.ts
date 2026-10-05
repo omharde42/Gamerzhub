@@ -4,7 +4,7 @@ import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 import multer from 'multer';
 
-export const errorHandler = (err: Error, _req: Request, res: Response, _next: NextFunction): void => {
+export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction): void => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       res.status(400).json({ success: false, message: 'Image is too large. Maximum size is 5MB.' });
@@ -27,10 +27,13 @@ export const errorHandler = (err: Error, _req: Request, res: Response, _next: Ne
     res.status(422).json({ success: false, message: 'Validation failed', errors });
     return;
   }
+  if (err instanceof RangeError) {
+    console.error(`[Validation RangeError] ${req.method} ${req.originalUrl}:`, err.message);
+    res.status(400).json({ success: false, message: 'Invalid date or numeric parameter provided' });
+    return;
+  }
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    // Log details server-side but never return raw Prisma messages to clients:
-    // they can reveal table/column names and internal schema details.
-    console.error('Prisma error:', err.code, err.message);
+    console.error(`[Prisma Error ${err.code}] ${req.method} ${req.originalUrl}:`, err.message);
     const statusMap: Record<string, number> = {
       P2002: 409,
       P2003: 400,
@@ -47,12 +50,20 @@ export const errorHandler = (err: Error, _req: Request, res: Response, _next: Ne
     return;
   }
   if (err instanceof Prisma.PrismaClientValidationError) {
-    console.error('Prisma Validation Error:', err.message);
+    console.error(`[Prisma Validation Error] ${req.method} ${req.originalUrl}:`, err.message);
     res.status(400).json({ success: false, message: 'Invalid database input' });
     return;
   }
-  console.error('Unhandled error:', err);
-  res.status(500).json({ success: false, message: 'Internal server error' });
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    console.error(`[Prisma Database Connection Error] ${req.method} ${req.originalUrl}:`, err.message);
+    res.status(503).json({ success: false, message: 'Database service unavailable. Please try again.' });
+    return;
+  }
+  console.error(`[Unhandled Error] ${req.method} ${req.originalUrl}:`, err.name, err.message, err.stack);
+  res.status(500).json({
+    success: false,
+    message: process.env.NODE_ENV === 'development' ? err.message || 'Internal server error' : 'Internal server error',
+  });
 };
 
 export const notFoundHandler = (_req: Request, res: Response): void => {

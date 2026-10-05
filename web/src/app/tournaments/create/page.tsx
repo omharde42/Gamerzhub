@@ -36,6 +36,12 @@ export default function CreateTournamentPage() {
       return;
     }
 
+    const parsedDate = new Date(formData.startDate);
+    if (isNaN(parsedDate.getTime())) {
+      toast.error('Please select a valid start date and time.');
+      return;
+    }
+
     setLoading(true);
     try {
       const { data } = await api.post('/tournaments', {
@@ -43,22 +49,29 @@ export default function CreateTournamentPage() {
         description: formData.description.trim(),
         game: formData.game,
         format: formData.format,
-        maxTeams: Number(formData.maxTeams),
-        prizePool: Number(formData.prizePool),
-        startDate: new Date(formData.startDate).toISOString(),
+        maxTeams: Math.max(2, Number(formData.maxTeams) || 16),
+        prizePool: Math.max(0, Number(formData.prizePool) || 0),
+        startDate: parsedDate.toISOString(),
         rules: formData.rules.trim(),
         status: 'REGISTRATION_OPEN',
       });
 
+      const newTournamentId = data.data?.id || data.id;
       toast.success('Tournament created successfully!');
       fireCelebration('Tournament published!', 'The arena is open — players can now register.');
-      router.push(`/tournaments/${data.data?.id || ''}`);
+      router.push(`/tournaments/${newTournamentId || ''}`);
     } catch (err: any) {
       if (err.response?.status === 401) {
         toast.error('Please sign in to create a tournament.');
         router.push('/auth/login?redirect=/tournaments/create');
       } else {
-        const msg = err.response?.data?.message || err.message || 'Failed to create tournament';
+        let msg = err.response?.data?.message || err.message || 'Failed to create tournament';
+        if (err.response?.data?.errors) {
+          const firstErrKey = Object.keys(err.response.data.errors)[0];
+          if (firstErrKey && err.response.data.errors[firstErrKey]?.[0]) {
+            msg = `${firstErrKey}: ${err.response.data.errors[firstErrKey][0]}`;
+          }
+        }
         toast.error(msg);
       }
     } finally {

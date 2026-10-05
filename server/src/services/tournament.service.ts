@@ -32,11 +32,33 @@ export class TournamentService {
     },
     userId: string
   ) {
+    if (!userId) {
+      throw new ValidationError('User identification is required to create a tournament');
+    }
     const { startDate, endDate, registrationEnd, mapPool, formatMode, status, ...rest } = data;
+    const gameName = (rest.game || 'Free Fire').trim();
     let type = rest.type || rest.format || TournamentType.SINGLE_ELIMINATION;
-    if (formatMode || rest.game.toLowerCase().includes('pubg') || rest.game.toLowerCase().includes('free fire')) {
+    if (formatMode || gameName.toLowerCase().includes('pubg') || gameName.toLowerCase().includes('free fire')) {
       type = TournamentType.BATTLE_ROYALE;
     }
+
+    const parsedStartDate = new Date(startDate);
+    if (isNaN(parsedStartDate.getTime())) {
+      throw new ValidationError('Invalid tournament start date provided');
+    }
+
+    let parsedEndDate: Date | undefined = undefined;
+    if (endDate) {
+      const d = new Date(endDate);
+      if (!isNaN(d.getTime())) parsedEndDate = d;
+    }
+
+    let parsedRegEnd: Date | undefined = undefined;
+    if (registrationEnd) {
+      const d = new Date(registrationEnd);
+      if (!isNaN(d.getTime())) parsedRegEnd = d;
+    }
+
     const organizerId = await this.resolveOrganizerId(userId);
 
     let minTeamSize = rest.minTeamSize || 1;
@@ -54,21 +76,21 @@ export class TournamentService {
 
     return prisma.tournament.create({
       data: {
-        title: rest.title,
-        description: rest.description,
-        game: rest.game,
+        title: rest.title.trim(),
+        description: rest.description ? rest.description.trim() : undefined,
+        game: gameName,
         type,
-        maxTeams: rest.maxTeams,
+        maxTeams: Number(rest.maxTeams) || 16,
         minTeamSize,
         maxTeamSize,
-        prizePool: rest.prizePool || 0,
-        entryFee: rest.entryFee || 0,
-        rules: rest.rules,
-        mapPool: mapPool || [],
+        prizePool: Number(rest.prizePool) || 0,
+        entryFee: Number(rest.entryFee) || 0,
+        rules: rest.rules ? rest.rules.trim() : undefined,
+        mapPool: Array.isArray(mapPool) ? mapPool : [],
         customFields: { formatMode: formatMode || (maxTeamSize === 1 ? 'SOLO' : maxTeamSize === 2 ? 'DUO' : 'SQUAD') },
-        startDate: new Date(startDate),
-        endDate: endDate ? new Date(endDate) : undefined,
-        registrationEnd: registrationEnd ? new Date(registrationEnd) : undefined,
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
+        registrationEnd: parsedRegEnd,
         organizerId,
         status: status || TournamentStatus.REGISTRATION_OPEN,
       },
@@ -96,16 +118,27 @@ export class TournamentService {
    * always holds.
    */
   private async resolveOrganizerId(userId: string): Promise<string> {
+    if (!userId) throw new ValidationError('User ID is required');
     const membership = await prisma.organizationMember.findFirst({
       where: { userId },
       select: { organizationId: true },
     });
     if (membership) return membership.organizationId;
+
     const owned = await prisma.organization.findFirst({
       where: { ownerId: userId },
       select: { id: true },
     });
-    if (owned) return owned.id;
+    if (owned) {
+      if (prisma.organizationMember && typeof (prisma.organizationMember as any).upsert === 'function') {
+        await (prisma.organizationMember as any).upsert({
+          where: { organizationId_userId: { organizationId: owned.id, userId } },
+          create: { organizationId: owned.id, userId, role: OrgMemberRole.OWNER },
+          update: { role: OrgMemberRole.OWNER },
+        }).catch(() => {});
+      }
+      return owned.id;
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -121,6 +154,12 @@ export class TournamentService {
           name: `${username}'s Organization (${uniqueSuffix})`,
           slug: `${slugBase}-org-${uniqueSuffix}`,
           ownerId: userId,
+          members: {
+            create: {
+              userId,
+              role: OrgMemberRole.OWNER,
+            },
+          },
         },
       });
       return org.id;

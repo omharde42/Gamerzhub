@@ -32,9 +32,13 @@ export class ForbiddenError extends AppError {
 
 export class ValidationError extends AppError {
   public errors: Record<string, string[]>;
-  constructor(errors: Record<string, string[]>) {
-    super('Validation failed', 422, 'VALIDATION_ERROR');
-    this.errors = errors;
+  constructor(errors: Record<string, string[]> | string) {
+    super(typeof errors === 'string' ? errors : 'Validation failed', 422, 'VALIDATION_ERROR');
+    if (typeof errors === 'string') {
+      this.errors = { _error: [errors] };
+    } else {
+      this.errors = errors;
+    }
   }
 }
 
