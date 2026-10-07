@@ -16,16 +16,18 @@ import {
   RotateCcw,
   Clock,
   ArrowRight,
-  CheckCircle2,
   Menu,
   X,
   ExternalLink,
   Shield,
   Search,
   Sparkles,
+  Flame,
+  Star,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 
@@ -94,13 +96,17 @@ export default function StartupLandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0E17] text-foreground flex flex-col relative selection:bg-emerald-500/30 selection:text-emerald-400">
+    <div className="min-h-screen bg-[#070A11] text-foreground flex flex-col relative selection:bg-emerald-500/30 selection:text-emerald-400 overflow-x-hidden">
+      {/* Background Aurora Ambient Lights */}
+      <div className="gamer-aurora gamer-aurora-1 pointer-events-none" />
+      <div className="gamer-aurora gamer-aurora-2 pointer-events-none" />
+
       {/* 1. NAVBAR */}
-      <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0A0E17]/90 backdrop-blur-md">
+      <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#070A11]/85 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-9 h-9 rounded-xl overflow-hidden border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-center p-1 group-hover:border-emerald-500/60 transition-colors">
+          <Link href="/" className="flex items-center gap-3 group shrink-0">
+            <div className="w-9 h-9 rounded-xl overflow-hidden border border-emerald-500/40 bg-emerald-500/10 flex items-center justify-center p-1 group-hover:border-emerald-400 transition-colors shadow-lg shadow-emerald-500/10">
               <Image
                 src="/logo.webp"
                 alt="GamerZ Hub Logo"
@@ -133,12 +139,12 @@ export default function StartupLandingPage() {
           {/* Right Action Buttons */}
           <div className="hidden md:flex items-center gap-3">
             <Link href="/auth/login">
-              <Button variant="outline" size="sm" className="rounded-xl px-4 font-bold border-white/10 hover:bg-white/5">
+              <Button variant="outline" size="sm" className="rounded-xl px-4 font-bold border-white/15 bg-white/5 hover:bg-white/10 text-white">
                 Login
               </Button>
             </Link>
             <Link href="/auth/register">
-              <Button variant="gradient" size="sm" className="rounded-xl px-5 font-extrabold bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25">
+              <Button size="sm" className="rounded-xl px-5 font-extrabold bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-black hover:brightness-110 shadow-lg shadow-emerald-500/25 transition-all">
                 Get Started
               </Button>
             </Link>
@@ -147,7 +153,7 @@ export default function StartupLandingPage() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-gray-300 hover:text-white"
+            className="md:hidden p-2 text-gray-300 hover:text-white rounded-lg border border-white/10 bg-white/5"
             aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -156,43 +162,43 @@ export default function StartupLandingPage() {
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-b border-white/10 bg-[#0A0E17] px-4 py-4 space-y-3">
+          <div className="md:hidden border-b border-white/10 bg-[#070A11]/95 backdrop-blur-2xl px-4 py-5 space-y-4 animate-in slide-in-from-top-2 duration-200">
             <Link
               href="/teams"
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm font-semibold text-gray-300 hover:text-emerald-400 py-1"
+              className="block text-base font-semibold text-gray-200 hover:text-emerald-400 py-1"
             >
               Discover
             </Link>
             <Link
               href="/tournaments"
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm font-semibold text-gray-300 hover:text-emerald-400 py-1"
+              className="block text-base font-semibold text-gray-200 hover:text-emerald-400 py-1"
             >
               Tournaments
             </Link>
             <Link
               href="/teams"
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm font-semibold text-gray-300 hover:text-emerald-400 py-1"
+              className="block text-base font-semibold text-gray-200 hover:text-emerald-400 py-1"
             >
               Teams
             </Link>
             <a
               href="#how-it-works"
               onClick={() => setMobileMenuOpen(false)}
-              className="block text-sm font-semibold text-gray-300 hover:text-emerald-400 py-1"
+              className="block text-base font-semibold text-gray-200 hover:text-emerald-400 py-1"
             >
               How It Works
             </a>
-            <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
+            <div className="pt-4 border-t border-white/10 flex flex-col gap-2.5">
               <Link href="/auth/login" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="outline" className="w-full rounded-xl font-bold border-white/10">
+                <Button variant="outline" className="w-full rounded-xl font-bold border-white/15 bg-white/5 text-white">
                   Login
                 </Button>
               </Link>
               <Link href="/auth/register" onClick={() => setMobileMenuOpen(false)}>
-                <Button variant="gradient" className="w-full rounded-xl font-extrabold bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+                <Button className="w-full rounded-xl font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 text-black">
                   Get Started
                 </Button>
               </Link>
@@ -202,29 +208,30 @@ export default function StartupLandingPage() {
       </nav>
 
       {/* 2. HERO SECTION */}
-      <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden">
+      <section className="relative pt-10 pb-16 md:pt-20 md:pb-28 overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             {/* Left Content */}
             <div className="lg:col-span-6 space-y-6 text-center lg:text-left">
-              <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-3 py-1 text-xs font-bold rounded-full">
-                ⚡ Squad Continuity Platform
-              </Badge>
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3.5 py-1.5 rounded-full text-emerald-400 text-xs font-bold tracking-wide shadow-sm shadow-emerald-500/10">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                <span>Squad Continuity Platform</span>
+              </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1]">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15] text-white">
                 Find teammates.{' '}
                 <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
                   Build better squads.
                 </span>
               </h1>
 
-              <p className="text-base sm:text-lg text-gray-300 max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
+              <p className="text-sm sm:text-lg text-gray-300 max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
                 GamerZ Hub helps gamers discover suitable teammates, find better gaming sessions, and turn good matches into squads that play together again.
               </p>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-2">
                 <Link href="/auth/register" className="w-full sm:w-auto">
-                  <Button variant="gradient" size="xl" className="w-full sm:w-auto px-8 h-13 rounded-2xl font-extrabold text-base bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2">
+                  <Button size="xl" className="w-full sm:w-auto px-8 h-13 rounded-2xl font-black text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-black shadow-xl shadow-emerald-500/25 hover:brightness-110 transition-all flex items-center justify-center gap-2">
                     Find Your Squad <ArrowRight className="h-5 w-5" />
                   </Button>
                 </Link>
@@ -238,81 +245,92 @@ export default function StartupLandingPage() {
 
             {/* Right Product Visual / Teammate Discovery Mockup */}
             <div className="lg:col-span-6">
-              <div className="relative rounded-3xl border border-emerald-500/30 bg-[#0E1424]/90 p-5 sm:p-6 shadow-2xl shadow-emerald-950/40 backdrop-blur-xl">
-                {/* Product Header */}
-                <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+              <div className="relative rounded-3xl border border-emerald-500/30 bg-[#0E1424]/90 p-4 sm:p-6 shadow-2xl shadow-emerald-950/50 backdrop-blur-xl space-y-4">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
                   <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-emerald-400" />
-                    <span className="font-extrabold text-sm text-white uppercase tracking-wider">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-black text-xs sm:text-sm text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="h-4 w-4 text-emerald-400 shrink-0" />
                       Teammate Discovery
                     </span>
                   </div>
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] font-mono font-bold">
-                    Filter: Valorant • NA-East
-                  </Badge>
+                  <div className="self-start sm:self-auto max-w-full">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] sm:text-xs font-mono font-bold max-w-full truncate px-2.5 py-0.5">
+                      Filter: Valorant • NA-East
+                    </Badge>
+                  </div>
                 </div>
 
                 {/* Player Card 1 */}
-                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 mb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 p-0.5 shrink-0">
-                        <div className="w-full h-full rounded-[10px] bg-slate-950 flex items-center justify-center font-black text-emerald-400 text-sm">
+                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-3.5 sm:p-4 transition-all hover:border-emerald-400/60">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 p-0.5 shrink-0 shadow-md shadow-emerald-500/20">
+                        <div className="w-full h-full rounded-[10px] bg-slate-950 flex items-center justify-center font-black text-emerald-400 text-xs sm:text-sm">
                           AX
                         </div>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-white">ApexViper</h4>
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30">
-                            ✓ Game ID Verified
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-extrabold text-sm text-white truncate">ApexViper</h4>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap shrink-0 flex items-center gap-1">
+                            <Shield className="w-3 h-3 text-emerald-400 shrink-0" /> Verified
                           </span>
                         </div>
-                        <p className="text-xs text-emerald-400 font-mono font-semibold">Diamond II • IGL / Initiator</p>
+                        <p className="text-xs text-emerald-400 font-mono font-semibold truncate mt-0.5">
+                          Diamond II • IGL / Initiator
+                        </p>
                       </div>
                     </div>
 
-                    <span className="shrink-0 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black px-2.5 py-1 rounded-lg">
+                    <span className="self-start sm:self-center shrink-0 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black px-2.5 py-1 rounded-lg whitespace-nowrap shadow-sm shadow-emerald-500/20">
                       ⚡ 96% Match
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-white/10 text-xs">
-                    <span className="text-gray-400 font-medium">Communication: <strong className="text-gray-200">Shotcaller</strong></span>
-                    <button className="rounded-lg bg-emerald-500 px-3 py-1.5 font-bold text-black text-xs hover:bg-emerald-400 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 mt-3 border-t border-white/10 text-xs">
+                    <span className="text-gray-400 font-medium truncate">
+                      Communication: <strong className="text-gray-100 font-semibold">Shotcaller</strong>
+                    </span>
+                    <button className="w-full sm:w-auto rounded-xl bg-emerald-500 px-4 py-1.5 font-bold text-black text-xs hover:bg-emerald-400 transition-all shadow-md shadow-emerald-500/25 active:scale-95 shrink-0">
                       Invite to Squad
                     </button>
                   </div>
                 </div>
 
                 {/* Player Card 2 */}
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 p-0.5 shrink-0">
-                        <div className="w-full h-full rounded-[10px] bg-slate-950 flex items-center justify-center font-black text-purple-400 text-sm">
+                <div className="rounded-2xl border border-purple-500/30 bg-purple-950/20 p-3.5 sm:p-4 transition-all hover:border-purple-400/50">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 p-0.5 shrink-0 shadow-md shadow-purple-500/20">
+                        <div className="w-full h-full rounded-[10px] bg-slate-950 flex items-center justify-center font-black text-purple-400 text-xs sm:text-sm">
                           KR
                         </div>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-white">Krono_CS</h4>
-                          <span className="text-[10px] bg-purple-500/20 text-purple-300 font-mono font-bold px-2 py-0.5 rounded border border-purple-500/30">
-                            ✓ Game ID Verified
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-extrabold text-sm text-white truncate">Krono_CS</h4>
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 font-mono font-bold px-2 py-0.5 rounded border border-purple-500/30 whitespace-nowrap shrink-0 flex items-center gap-1">
+                            <Shield className="w-3 h-3 text-purple-400 shrink-0" /> Verified
                           </span>
                         </div>
-                        <p className="text-xs text-purple-300 font-mono font-semibold">Ascendant I • Duelist</p>
+                        <p className="text-xs text-purple-300 font-mono font-semibold truncate mt-0.5">
+                          Ascendant I • Duelist
+                        </p>
                       </div>
                     </div>
 
-                    <span className="shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-black px-2.5 py-1 rounded-lg">
+                    <span className="self-start sm:self-center shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 text-xs font-black px-2.5 py-1 rounded-lg whitespace-nowrap shadow-sm shadow-purple-500/20">
                       ⚡ 92% Match
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-white/10 text-xs">
-                    <span className="text-gray-400 font-medium">Playstyle: <strong className="text-gray-200">Aggressive Entry</strong></span>
-                    <button className="rounded-lg bg-white/10 px-3 py-1.5 font-bold text-gray-200 text-xs hover:bg-white/20 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-3 mt-3 border-t border-white/10 text-xs">
+                    <span className="text-gray-400 font-medium truncate">
+                      Playstyle: <strong className="text-gray-100 font-semibold">Aggressive Entry</strong>
+                    </span>
+                    <button className="w-full sm:w-auto rounded-xl bg-white/10 px-4 py-1.5 font-bold text-gray-200 text-xs hover:bg-white/20 transition-all border border-white/10 shrink-0">
                       Invite to Squad
                     </button>
                   </div>
@@ -324,65 +342,65 @@ export default function StartupLandingPage() {
       </section>
 
       {/* 3. PROBLEM SECTION */}
-      <section className="py-20 border-t border-white/10 bg-[#0E1424]/40">
+      <section className="py-16 sm:py-20 border-t border-white/10 bg-[#0A0E17]/60 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+          <div className="text-center max-w-3xl mx-auto space-y-4 mb-14">
+            <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
               Finding players is easy. <span className="text-emerald-400">Finding the right players isn&apos;t.</span>
             </h2>
-            <p className="text-base text-gray-300">
+            <p className="text-sm sm:text-base text-gray-300">
               Most platforms leave session quality entirely to random chance. GamerZ Hub was built to fix the three core breakdown points in online gaming.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Card variant="glass" className="rounded-3xl p-6 border-white/10 bg-black/40 space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="rounded-3xl p-6 border border-white/10 bg-white/[0.03] space-y-4 hover:border-red-500/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shadow-lg shadow-red-500/10">
                 <Users className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-bold text-white">Random Teammates</h3>
               <p className="text-sm text-gray-300 leading-relaxed">
-                You don&apos;t know who you&apos;re going to play with. Solo queuing pairs you with unverified randoms with unpredictable commitment.
+                Solo queuing pairs you with unverified randoms with unpredictable commitment and mismatched goals.
               </p>
-            </Card>
+            </div>
 
-            <Card variant="glass" className="rounded-3xl p-6 border-white/10 bg-black/40 space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="rounded-3xl p-6 border border-white/10 bg-white/[0.03] space-y-4 hover:border-amber-500/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
                 <Zap className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-bold text-white">Poor Compatibility</h3>
               <p className="text-sm text-gray-300 leading-relaxed">
-                Different skill levels, playstyles, communication habits and goals can ruin a session before the first match finishes.
+                Different skill levels, playstyles, and communication habits can ruin a session before the first match finishes.
               </p>
-            </Card>
+            </div>
 
-            <Card variant="glass" className="rounded-3xl p-6 border-white/10 bg-black/40 space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+            <div className="rounded-3xl p-6 border border-white/10 bg-white/[0.03] space-y-4 hover:border-purple-500/40 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-lg shadow-purple-500/10">
                 <RotateCcw className="h-6 w-6" />
               </div>
               <h3 className="text-xl font-bold text-white">No Continuity</h3>
               <p className="text-sm text-gray-300 leading-relaxed">
-                You may have a great session with someone but never play together again due to lost contacts and missing session history.
+                You may have a great session with someone but never play together again due to lost contacts and missing history.
               </p>
-            </Card>
+            </div>
           </div>
 
           <div className="mt-12 text-center">
             <p className="text-base font-extrabold text-emerald-400 tracking-wide">
-              GamerZ Hub is designed around solving that gap.
+              GramerZ Hub is designed around solving that gap.
             </p>
           </div>
         </div>
       </section>
 
       {/* 4. HOW GAMERZ HUB WORKS (6-Step Process) */}
-      <section id="how-it-works" className="py-20 border-t border-white/10">
+      <section id="how-it-works" className="py-16 sm:py-20 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-3 mb-16">
-            <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-3 py-1 text-xs font-bold rounded-full">
+          <div className="text-center max-w-3xl mx-auto space-y-3 mb-14">
+            <Badge className="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-3.5 py-1 text-xs font-bold rounded-full">
               Workflow
             </Badge>
-            <h2 className="text-3xl sm:text-4xl font-black text-white">How GamerZ Hub Works</h2>
+            <h2 className="text-2xl sm:text-4xl font-black text-white">How GamerZ Hub Works</h2>
             <p className="text-sm text-gray-300">
               A structured 6-step loop built specifically to take you from solo queuing to repeat squad matches.
             </p>
@@ -421,7 +439,7 @@ export default function StartupLandingPage() {
                 desc: 'Turn repeat teammates into a permanent, trusted squad for ranked queues and tournaments.',
               },
             ].map((s) => (
-              <div key={s.step} className="rounded-2xl border border-white/10 bg-[#0E1424]/60 p-6 space-y-3 hover:border-emerald-500/40 transition-colors">
+              <div key={s.step} className="rounded-2xl border border-white/10 bg-[#0E1424]/70 p-6 space-y-3 hover:border-emerald-500/40 transition-all hover:-translate-y-1 shadow-lg">
                 <span className="font-mono text-2xl font-black text-emerald-400">{s.step}</span>
                 <h3 className="text-lg font-bold text-white">{s.title}</h3>
                 <p className="text-xs text-gray-300 leading-relaxed">{s.desc}</p>
@@ -432,10 +450,10 @@ export default function StartupLandingPage() {
       </section>
 
       {/* 5. CORE FEATURES */}
-      <section className="py-20 border-t border-white/10 bg-[#0E1424]/40">
+      <section className="py-16 sm:py-20 border-t border-white/10 bg-[#0A0E17]/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto space-y-3 mb-16">
-            <h2 className="text-3xl sm:text-4xl font-black text-white">Core Product Features</h2>
+          <div className="text-center max-w-3xl mx-auto space-y-3 mb-14">
+            <h2 className="text-2xl sm:text-4xl font-black text-white">Core Product Features</h2>
             <p className="text-sm text-gray-300">
               Purpose-built tools for finding compatible players and maintaining squad continuity.
             </p>
@@ -481,7 +499,7 @@ export default function StartupLandingPage() {
             ].map((f, i) => {
               const Icon = f.icon;
               return (
-                <div key={i} className="rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3 hover:border-emerald-500/40 transition-colors">
+                <div key={i} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 space-y-3 hover:border-emerald-500/40 transition-all">
                   <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                     <Icon className="h-5 w-5" />
                   </div>
@@ -495,21 +513,21 @@ export default function StartupLandingPage() {
       </section>
 
       {/* 6. TOURNAMENTS SECTION */}
-      <section className="py-20 border-t border-white/10">
+      <section className="py-16 sm:py-20 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
             <div>
               <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 px-3 py-1 text-xs font-bold rounded-full mb-2">
                 Competitions
               </Badge>
-              <h2 className="text-3xl sm:text-4xl font-black text-white">Discover tournaments</h2>
+              <h2 className="text-2xl sm:text-4xl font-black text-white">Discover tournaments</h2>
               <p className="text-sm text-gray-300 mt-1">
                 Find gaming tournaments and competitions in one place.
               </p>
             </div>
 
             <Link href="/tournaments">
-              <Button variant="outline" className="rounded-xl font-bold text-xs border-white/15 hover:bg-white/5 gap-2">
+              <Button variant="outline" className="rounded-xl font-bold text-xs border-white/15 hover:bg-white/5 text-white gap-2">
                 Explore All Tournaments <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -521,35 +539,37 @@ export default function StartupLandingPage() {
               const isExternal = t.url && (t.url.startsWith('http://') || t.url.startsWith('https://'));
 
               return (
-                <Card key={t.id || i} variant="glass" className="rounded-2xl border-white/10 bg-[#0E1424]/60 p-5 space-y-4 hover:border-emerald-500/40 transition-colors">
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] font-mono px-2 py-0.5 border ${
-                        isChallonge
-                          ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
-                          : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
-                      }`}
-                    >
-                      {isChallonge ? '⚡ Challonge' : '🏆 GamerZ Hub'}
-                    </Badge>
-                    <span className="text-[10px] font-mono uppercase bg-white/5 text-gray-300 px-2 py-0.5 rounded border border-white/10">
-                      {t.status?.replace('_', ' ') || 'OPEN'}
-                    </span>
-                  </div>
+                <div key={t.id || i} className="rounded-2xl border border-white/10 bg-[#0E1424]/70 p-5 space-y-4 hover:border-emerald-500/40 transition-all flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-mono px-2 py-0.5 border ${
+                          isChallonge
+                            ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+                            : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                        }`}
+                      >
+                        {isChallonge ? '⚡ Challonge' : '🏆 GamerZ Hub'}
+                      </Badge>
+                      <span className="text-[10px] font-mono uppercase bg-white/5 text-gray-300 px-2 py-0.5 rounded border border-white/10 whitespace-nowrap">
+                        {t.status?.replace('_', ' ') || 'OPEN'}
+                      </span>
+                    </div>
 
-                  <div>
-                    <h3 className="font-extrabold text-base text-white truncate">{t.name || t.title}</h3>
-                    <p className="text-xs text-emerald-400 font-mono font-bold mt-0.5">{t.game || 'Esports'}</p>
-                  </div>
+                    <div>
+                      <h3 className="font-extrabold text-base text-white truncate">{t.name || t.title}</h3>
+                      <p className="text-xs text-emerald-400 font-mono font-bold mt-0.5">{t.game || 'Esports'}</p>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 pt-2 border-t border-white/10">
-                    <span className="flex items-center gap-1 font-medium">
-                      <Users className="h-3.5 w-3.5 text-emerald-400" /> {t.participants ?? 0}/{t.maxParticipants ?? '16'}
-                    </span>
-                    <span className="flex items-center gap-1 font-medium">
-                      <Clock className="h-3.5 w-3.5 text-amber-400" /> {t.startDate ? formatDate(t.startDate) : 'TBD'}
-                    </span>
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 pt-2 border-t border-white/10">
+                      <span className="flex items-center gap-1 font-medium truncate">
+                        <Users className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> {t.participants ?? 0}/{t.maxParticipants ?? '16'}
+                      </span>
+                      <span className="flex items-center gap-1 font-medium truncate">
+                        <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0" /> {t.startDate ? formatDate(t.startDate) : 'TBD'}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="pt-2">
@@ -558,19 +578,19 @@ export default function StartupLandingPage() {
                         href={t.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full inline-flex items-center justify-center gap-1.5 h-8 text-xs font-bold rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-colors"
+                        className="w-full inline-flex items-center justify-center gap-1.5 h-9 text-xs font-bold rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-colors"
                       >
                         View Tournament <ExternalLink className="h-3 w-3" />
                       </a>
                     ) : (
                       <Link href={t.url || `/tournaments/${t.id}`}>
-                        <Button variant="gradient" size="sm" className="w-full h-8 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+                        <Button className="w-full h-9 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black hover:brightness-110">
                           View Tournament
                         </Button>
                       </Link>
                     )}
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
@@ -578,27 +598,27 @@ export default function StartupLandingPage() {
       </section>
 
       {/* 7. PRODUCT PREVIEW SECTION */}
-      <section className="py-20 border-t border-white/10 bg-[#0E1424]/40">
+      <section className="py-16 sm:py-20 border-t border-white/10 bg-[#0A0E17]/60">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto space-y-3 mb-12">
-            <h2 className="text-3xl sm:text-4xl font-black text-white">Designed for Seamless Teammate Discovery</h2>
+            <h2 className="text-2xl sm:text-4xl font-black text-white">Designed for Seamless Teammate Discovery</h2>
             <p className="text-sm text-gray-300">
               A clean SaaS interface designed to get you out of random queues and into compatible squads.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-white/15 bg-[#0A0E17] p-6 shadow-2xl space-y-6">
+          <div className="rounded-3xl border border-white/15 bg-[#070A11] p-4 sm:p-6 shadow-2xl space-y-6">
             {/* Toolbar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-white/10 pb-4">
-              <div className="flex items-center gap-3 w-full sm:w-auto">
-                <Search className="h-4 w-4 text-emerald-400" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <Search className="h-4 w-4 text-emerald-400 shrink-0" />
                 <span className="text-xs font-bold text-white uppercase tracking-wider">Find Teammates</span>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {['Valorant', 'CS2', 'League of Legends'].map((g, idx) => (
                   <span
                     key={g}
-                    className={`text-[10px] font-mono font-bold px-3 py-1 rounded-full border ${
+                    className={`text-[10px] font-mono font-bold px-3 py-1 rounded-full border max-w-full truncate ${
                       idx === 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-white/5 text-gray-400 border-white/10'
                     }`}
                   >
@@ -608,29 +628,29 @@ export default function StartupLandingPage() {
               </div>
             </div>
 
-            {/* Simulated Table / Roster Rows */}
+            {/* Roster Rows */}
             <div className="space-y-3">
               {[
                 { name: 'Vortex_99', rank: 'Diamond III', role: 'Flex / Controller', match: '95%', status: 'Online Now' },
                 { name: 'ShadowStrike', rank: 'Ascendant I', role: 'Entry Fragger', match: '91%', status: 'In Lobby' },
                 { name: 'Nexus_Core', rank: 'Platinum II', role: 'Support / Sentinel', match: '88%', status: 'Online Now' },
               ].map((row, i) => (
-                <div key={i} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 p-4 text-xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400">
+                <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 p-3.5 sm:p-4 text-xs hover:border-emerald-500/30 transition-all">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 shrink-0">
                       {row.name[0]}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-white text-sm">{row.name}</h4>
-                      <p className="text-[11px] text-gray-400">{row.rank} • {row.role}</p>
+                    <div className="min-w-0">
+                      <h4 className="font-extrabold text-white text-sm truncate">{row.name}</h4>
+                      <p className="text-[11px] text-gray-400 font-mono truncate">{row.rank} • {row.role}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-                    <span className="font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 border-white/10 pt-2 sm:pt-0">
+                    <span className="font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 shrink-0 text-center sm:text-left">
                       ⚡ {row.match} Compatibility
                     </span>
-                    <Button size="sm" variant="gradient" className="h-8 text-xs font-bold rounded-lg bg-emerald-500 text-black hover:bg-emerald-400">
+                    <Button size="sm" className="w-full sm:w-auto h-8 text-xs font-bold rounded-xl bg-emerald-500 text-black hover:bg-emerald-400 shrink-0">
                       Send Squad Invite
                     </Button>
                   </div>
@@ -647,12 +667,12 @@ export default function StartupLandingPage() {
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             Your next squad could be <span className="text-emerald-400">one connection away.</span>
           </h2>
-          <p className="text-base text-gray-300 max-w-xl mx-auto">
+          <p className="text-sm sm:text-base text-gray-300 max-w-xl mx-auto">
             Stop leaving match quality to chance. Discover suitable teammates, enjoy better sessions, and build repeat squads with GamerZ Hub.
           </p>
           <div className="pt-2">
             <Link href="/auth/register">
-              <Button variant="gradient" size="xl" className="px-10 h-14 rounded-2xl font-black text-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-500/30">
+              <Button size="xl" className="px-10 h-14 rounded-2xl font-black text-lg bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 text-black shadow-xl shadow-emerald-500/30 hover:brightness-110 transition-all">
                 Get Started
               </Button>
             </Link>
@@ -661,7 +681,7 @@ export default function StartupLandingPage() {
       </section>
 
       {/* 9. FOOTER */}
-      <footer className="border-t border-white/10 bg-[#070A10] py-12 text-xs text-gray-400">
+      <footer className="border-t border-white/10 bg-[#04060B] py-12 text-xs text-gray-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {/* Column 1: Brand */}
@@ -708,3 +728,4 @@ export default function StartupLandingPage() {
     </div>
   );
 }
+
