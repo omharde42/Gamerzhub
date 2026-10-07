@@ -11,6 +11,7 @@ datasource db {
 
 model User {
   id              String   @id @default(uuid())
+  gamerzId        String?  @unique
   email           String   @unique
   emailVerified   DateTime?
   password        String?
@@ -78,6 +79,7 @@ model User {
   createdEvents       ServerEvent[]
   gameRequests        GameRequest[]
   gameAccounts        GameAccount[]
+  gameProfiles        GameProfile[]
   clashTagChangeCount Int        @default(0)
   clashTagHistory     Json?
   partnershipApplications PartnershipApplication[]
@@ -110,7 +112,32 @@ model User {
   enteredResults      TournamentResult[] @relation("EnteredResults")
   finalizedResults    TournamentResult[] @relation("FinalizedResults")
   @@index([email])
+  @@index([gamerzId])
   @@index([role])
+}
+
+model GameProfile {
+  id           String   @id @default(uuid())
+  userId       String
+  game         String
+  gameUid      String
+  inGameName   String?
+  rank         String?
+  level        Int?
+  region       String?
+  role         String?
+  availability String?
+  isPrimary    Boolean  @default(false)
+  verified     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, game])
+  @@index([userId])
+  @@index([game, rank, region])
+  @@index([game, gameUid])
 }
 
 model GameAccount {
