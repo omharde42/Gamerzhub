@@ -238,6 +238,14 @@ httpServer.listen(config.port, () => {
   console.log(`GamerHub API running on port ${config.port}`);
   console.log(`Environment: ${config.nodeEnv}`);
 
+  // Automatically backfill any missing GamerZ IDs for existing users
+  try {
+    const { backfillGamerZIds } = require('./scripts/backfillGamerZId');
+    backfillGamerZIds().catch((err: any) => console.error('[backfillGamerZIds]', err?.message));
+  } catch (e: any) {
+    console.warn('[backfillGamerZIds] Skipped backfill:', e?.message);
+  }
+
   // Automatically clean synthetic seeded users on startup (preserving genuine real users)
   try {
     const { cleanSeededUsers } = require('../prisma/clean-seeded-users');
