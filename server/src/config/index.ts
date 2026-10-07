@@ -80,5 +80,12 @@ export const config = {
   challonge: {
     apiKey: process.env.CHALLONGE_API_KEY || '',
   },
+  networkSecurity: {
+    enabled: process.env.NETWORK_WHITELIST_ENABLED === 'true',
+    allowedCidrs: (process.env.ALLOWED_IP_CIDRS || '127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16').split(',').map(s => s.trim()).filter(Boolean),
+    adminWhitelistOnly: process.env.ADMIN_NETWORK_WHITELIST_ONLY === 'true',
+    adminAllowedCidrs: (process.env.ADMIN_ALLOWED_IP_CIDRS || process.env.ALLOWED_IP_CIDRS || '127.0.0.1/32,::1/128').split(',').map(s => s.trim()).filter(Boolean),
+    logBlockedAttempts: process.env.LOG_BLOCKED_NETWORK_ATTEMPTS !== 'false',
+  },
 };
 

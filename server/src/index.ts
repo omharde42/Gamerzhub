@@ -148,8 +148,10 @@ app.use('/downloads', express.static(path.join(__dirname, '../public/downloads')
 app.use(generalLimiter);
 
 import { requestTimingMiddleware } from './middleware/timing';
+import { globalNetworkSecurityMiddleware, adminNetworkSecurityMiddleware } from './middleware/networkSecurity';
 
-// CSRF Protection (double-submit cookie pattern for browser-based requests)
+// CSRF Protection & Network Whitelisting (double-submit cookie pattern + IP/CIDR fail-closed checks)
+app.use(globalNetworkSecurityMiddleware);
 app.use(csrfProtection);
 app.use(requestTimingMiddleware);
 
@@ -187,7 +189,7 @@ app.use('/api/feed', feedRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
-app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminNetworkSecurityMiddleware, adminRoutes);
 app.use('/api/matchmaking', matchmakingRoutes);
 app.use('/api/passport', passportRoutes);
 app.use('/api/servers', serverRoutes);
