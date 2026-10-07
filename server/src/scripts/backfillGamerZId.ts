@@ -1,43 +1,51 @@
 import prisma from '../config/database';
-import { generateUniqueGamerZId } from '../utils/gamerzId';
+import { generateUniqueGamerZId, ensureUserGamerZId } from '../utils/gamerzId';
 
 /**
- * Scans all User records in PostgreSQL and assigns a unique GamerZ ID to any user missing one.
- * Guarantees zero data loss and 100% backward compatibility.
+ * Phase 2 — Safely Audits and Migrates Existing Users.
+ * - IF user already has a valid GamerZ ID: Keeps existing ID.
+ * - IF user lacks a GamerZ ID: Generates a new cryptographically secure unique GamerZ ID with collision verification.
+ * - Enforces 100% data preservation and unique constraint compliance.
  */
-export async function backfillGamerZIds() {
-  console.log('[Backfill] Auditing existing users for GamerZ IDs...');
-  const usersWithoutGamerZId = await prisma.user.findMany({
-    where: { gamerzId: null },
-    select: { id: true, email: true },
+export async function migrateExistingUsersSafely() {
+  console.log('[Phase 2 Migration] Auditing existing users in PostgreSQL...');
+
+  const allUsers = await prisma.user.findMany({
+    select: { id: true, email: true, gamerzId: true },
   });
 
-  if (usersWithoutGamerZId.length === 0) {
-    console.log('[Backfill] All existing users already have valid GamerZ IDs.');
-    return;
+  console.log(`[Phase 2 Migration] Found ${allUsers.length} total user record(s).`);
+
+  let keptCount = 0;
+  let generatedCount = 0;
+
+  for (const user of allUsers) {
+    if (user.gamerzId && user.gamerzId.trim().length > 0) {
+      keptCount++;
+      console.log(`[Phase 2 Migration] Kept existing GamerZ ID '${user.gamerzId}' for user ${user.id}`);
+    } else {
+      const newGamerZId = await ensureUserGamerZId(user);
+      generatedCount++;
+      console.log(`[Phase 2 Migration] Provisioned new GamerZ ID '${newGamerZId}' for user ${user.id} (${user.email})`);
+    }
   }
 
-  console.log(`[Backfill] Found ${usersWithoutGamerZId.length} user(s) requiring GamerZ ID generation.`);
-  let count = 0;
-
-  for (const user of usersWithoutGamerZId) {
-    const gamerzId = await generateUniqueGamerZId();
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { gamerzId },
-    });
-    count++;
-    console.log(`[Backfill] Assigned ${gamerzId} to user ${user.id} (${user.email})`);
+  // Verification step: Ensure zero users are missing a GamerZ ID
+  const unmigratedCount = await prisma.user.count({ where: { gamerzId: null } });
+  if (unmigratedCount > 0) {
+    throw new Error(`[Phase 2 Migration Error] ${unmigratedCount} user(s) still missing GamerZ ID after migration!`);
   }
 
-  console.log(`[Backfill] Successfully provisioned GamerZ IDs for ${count} user(s).`);
+  console.log(`[Phase 2 Migration Success] Total: ${allUsers.length} | Preserved: ${keptCount} | Provisioned: ${generatedCount}`);
 }
 
+export const backfillGamerZIds = migrateExistingUsersSafely;
+
 if (require.main === module) {
-  backfillGamerZIds()
+  migrateExistingUsersSafely()
     .then(() => process.exit(0))
     .catch((err) => {
-      console.error('[Backfill Error]:', err);
+      console.error('[Phase 2 Migration Failed]:', err);
       process.exit(1);
     });
 }

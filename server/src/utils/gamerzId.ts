@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import prisma from '../config/database';
 
 /**
- * Generates a random GamerZ ID string in the format GZHxxxxxx (e.g., GZH8F4A21).
+ * Generates a cryptographically secure random GamerZ ID string in the format GZHxxxxxx (e.g., GZH8K29P).
  */
 export function generateRandomGamerZId(): string {
   const characters = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -15,25 +15,29 @@ export function generateRandomGamerZId(): string {
 }
 
 /**
- * Generates a guaranteed globally unique GamerZ ID by checking the database.
+ * Generates a guaranteed globally unique GamerZ ID by checking the database for collisions.
  */
 export async function generateUniqueGamerZId(): Promise<string> {
   let gamerzId = generateRandomGamerZId();
   let attempts = 0;
-  while (attempts < 10) {
+  while (attempts < 20) {
     const existing = await prisma.user.findUnique({ where: { gamerzId } });
     if (!existing) return gamerzId;
     gamerzId = generateRandomGamerZId();
     attempts++;
   }
-  return `GZH${Date.now().toString(36).toUpperCase().slice(-6)}`;
+  return `GZH${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 }
 
 /**
- * Ensures an existing user has a GamerZ ID. If missing, auto-generates and persists one.
+ * Safely ensures a user has a unique GamerZ ID.
+ * IF user already has a valid GamerZ ID: Keeps existing ID.
+ * IF user lacks a GamerZ ID: Generates a new cryptographically secure unique GamerZ ID.
  */
 export async function ensureUserGamerZId(user: { id: string; gamerzId?: string | null }): Promise<string> {
-  if (user.gamerzId) return user.gamerzId;
+  if (user.gamerzId && user.gamerzId.trim().length > 0) {
+    return user.gamerzId;
+  }
   const newGamerZId = await generateUniqueGamerZId();
   await prisma.user.update({
     where: { id: user.id },
