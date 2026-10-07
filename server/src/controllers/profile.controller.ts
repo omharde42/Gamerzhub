@@ -362,6 +362,122 @@ export class ProfileController {
       totalPages: Math.ceil(total / parseInt(limit as string)),
     });
   });
+
+  /**
+   * GET /api/profiles/me
+   * Returns current user's profile, GamerZ ID, connected game profiles, and profile completion status.
+   */
+  getMyProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        profile: true,
+        gameProfiles: true,
+        gameAccounts: true,
+      },
+    });
+    if (!user) throw new NotFoundError('User');
+
+    // Ensure user has a GamerZ ID
+    const { ensureUserGamerZId } = require('../utils/gamerzId');
+    const gamerzId = await ensureUserGamerZId(user);
+    user.gamerzId = gamerzId;
+
+    const isProfileComplete = Boolean(
+      user.gameProfiles.length > 0 ||
+      user.gameAccounts.length > 0 ||
+      (user.profile?.rank && user.profile?.country)
+    );
+
+    sendSuccess(res, {
+      user: {
+        id: user.id,
+        email: user.email,
+        gamerzId,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
+      profile: user.profile,
+      gameProfiles: user.gameProfiles,
+      gameAccounts: user.gameAccounts,
+      isProfileComplete,
+    });
+  });
+
+  /**
+   * POST /api/profiles/setup-game
+   * Connects or updates a game-specific profile (Free Fire, PUBG, Valorant, CS2, etc.) for the current user.
+   */
+  setupGameProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { game, gameUid, inGameName, rank, level, region, role, availability, isPrimary = true } = req.body || {};
+
+    if (!game || !gameUid) {
+      throw new ValidationError({
+        game: !game ? ['Game is required (e.g. Free Fire, PUBG, Valorant, CS2)'] : [],
+        gameUid: !gameUid ? ['In-game UID is required'] : [],
+      });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundError('User');
+
+    const { ensureUserGamerZId } = require('../utils/gamerzId');
+    const gamerzId = await ensureUserGamerZId(user);
+
+    // Upsert GameProfile
+    const gameProfile = await prisma.gameProfile.upsert({
+      where: {
+        userId_game: { userId, game },
+      },
+      create: {
+        userId,
+        game,
+        gameUid,
+        inGameName: inGameName || null,
+        rank: rank || null,
+        level: level ? parseInt(String(level), 10) : null,
+        region: region || null,
+        role: role || null,
+        availability: availability || null,
+        isPrimary: Boolean(isPrimary),
+      },
+      update: {
+        gameUid,
+        inGameName: inGameName || undefined,
+        rank: rank || undefined,
+        level: level ? parseInt(String(level), 10) : undefined,
+        region: region || undefined,
+        role: role || undefined,
+        availability: availability || undefined,
+        isPrimary: Boolean(isPrimary),
+      },
+    });
+
+    // Also sync/update primary Profile metadata
+    const existingProfile = await prisma.profile.findUnique({ where: { userId } });
+    const currentMainGames = existingProfile?.mainGames || [];
+    const updatedMainGames = Array.from(new Set([...currentMainGames, game]));
+
+    const profile = await prisma.profile.update({
+      where: { userId },
+      data: {
+        rank: rank || existingProfile?.rank,
+        role: role || existingProfile?.role,
+        country: region || existingProfile?.country,
+        availability: availability || existingProfile?.availability,
+        mainGames: updatedMainGames,
+      },
+    });
+
+    sendSuccess(res, {
+      gamerzId,
+      gameProfile,
+      profile,
+      isProfileComplete: true,
+    }, 'Game profile updated successfully');
+  });
 }
 
 export const profileController = new ProfileController();

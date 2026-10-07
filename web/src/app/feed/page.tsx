@@ -16,6 +16,7 @@ import { PostCardSkeleton } from '@/components/post/post-card-skeleton';
 import { CreatePost } from '@/components/post/create-post';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
+import ExistingUserProfileUpgradeModal from '@/components/profile/ExistingUserProfileUpgradeModal';
 
 const SUGGESTED_PLAYERS = [
   { username: 'ProGamerX', rank: 'Diamond', role: 'Entry Fragger', game: 'Valorant' },
@@ -311,6 +312,9 @@ export default function FeedPage() {
           </Card>
         </div>
       </div>
+
+      {/* Existing User Profile Upgrade Prompt */}
+      <ExistingUserProfileUpgradeModal />
     </div>
   );
 }

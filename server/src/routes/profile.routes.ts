@@ -5,6 +5,8 @@ import { uploadAvatar, uploadBanner } from '../middleware/upload';
 
 const router = Router();
 
+router.get('/me', authenticate, profileController.getMyProfile);
+router.post('/setup-game', authenticate, profileController.setupGameProfile);
 router.get('/search', authenticate, profileController.searchProfiles);
 router.get('/public/:userId', optionalAuth, profileController.getPublicProfileById);
 router.get('/:username', optionalAuth, profileController.getProfile);
