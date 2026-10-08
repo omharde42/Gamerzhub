@@ -328,6 +328,11 @@ export default function ProfilePage() {
               <motion.div className="flex flex-col md:flex-row md:items-center gap-2" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{profile.displayName || profile.username}</h1>
                 <span className="text-muted-foreground">@{profile.username}</span>
+                {(profile.gamerzId || profile.user?.gamerzId) && (
+                  <span className="text-xs bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/40 shrink-0">
+                    GamerZ ID: {profile.gamerzId || profile.user?.gamerzId}
+                  </span>
+                )}
               </motion.div>
               <motion.div className="flex flex-wrap items-center gap-2 mt-1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
                 <LevelChip totalMatches={Number(profile.totalMatches || 0)} />
