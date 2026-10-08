@@ -15,5 +15,6 @@ router.post('/reject/:id', authenticate, friendIdParamValidation, validate, frie
 router.post('/remove', authenticate, removeFriendValidation, validate, friendController.removeFriend);
 router.get('/', authenticate, friendController.listFriends);
 router.get('/requests', authenticate, friendController.listRequests);
+router.get('/suggestions', authenticate, friendController.getSuggestions);
 
 export default router;

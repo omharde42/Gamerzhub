@@ -295,6 +295,7 @@ model Profile {
   @@index([country])
   @@index([winRate])
   @@index([gamerScore])
+  @@index([allowComparison])
 }
 
 model ConnectedGame {
