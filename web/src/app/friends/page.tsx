@@ -54,9 +54,10 @@ export default function FriendsPage() {
     enabled: debouncedQuery.trim().length >= 2,
   });
 
-  const { data: suggestions } = useQuery({
+  const { data: suggestions, isLoading: isSuggestionsLoading } = useQuery({
     queryKey: ['suggested-people'],
-    queryFn: () => api.get('/profiles/search?limit=15').then(r => r.data.data)
+    queryFn: () => api.get('/friends/suggestions').then(r => r.data.data),
+    staleTime: 60 * 1000,
   });
 
   // Fetch all gamer posts for the Global Community Showcase tab
