@@ -16,10 +16,16 @@ import { sanitizeProfileUpdate } from '../utils/profile-allowlist';
 
 export class ProfileController {
   getProfile = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const { username } = req.params;
+    const { username: param } = req.params;
 
-    const profile = await prisma.profile.findUnique({
-      where: { username },
+    // Support lookup by GamerZ ID (e.g. GZH7K29P4) or Username
+    let profile = await prisma.profile.findFirst({
+      where: {
+        OR: [
+          { username: param },
+          { user: { gamerzId: param } },
+        ],
+      },
       include: {
         achievements: true,
         certifications: true,
@@ -28,7 +34,10 @@ export class ProfileController {
         user: {
           select: {
             id: true,
+            gamerzId: true,
+            role: true,
             createdAt: true,
+            gameProfiles: true,
             _count: {
               select: {
                 followers: true,
@@ -40,7 +49,26 @@ export class ProfileController {
         },
       },
     });
+
     if (!profile) throw new NotFoundError('Profile');
+
+    const viewerId = req.user?.userId ?? undefined;
+    const isOwner = viewerId === profile.userId;
+    const isAdmin = req.user?.role === 'ADMIN';
+
+    // Privacy Authorization: If profile is set to Private (allowComparison = false) and viewer is not owner/admin
+    if (profile.allowComparison === false && !isOwner && !isAdmin) {
+      return sendSuccess(res, {
+        id: profile.id,
+        userId: profile.userId,
+        username: profile.username,
+        displayName: profile.displayName,
+        avatar: profile.avatar,
+        gamerzId: profile.user?.gamerzId,
+        isPrivate: true,
+        message: 'This GamerZ profile is set to private by the user.',
+      });
+    }
 
     // Background write-through sync to Appwrite read model
     appwriteService.syncPublicProfile({
@@ -60,8 +88,6 @@ export class ProfileController {
       languages: profile.languages,
       updatedAt: profile.updatedAt.toISOString(),
     }).catch(err => console.warn('[Appwrite] Profile sync warning:', err?.message));
-
-    const viewerId = req.user?.userId ?? undefined;
 
     // Non-blocking view tracking: record view in background
     if (viewerId !== profile.userId) {
