@@ -7,22 +7,46 @@ import { redis } from '../config/redis';
 import { config } from '../config';
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
+import { generateUniqueGamerZId } from '../utils/gamerzId';
+
 export class AuthService {
-  async register(email: string, password: string, username: string) {
+  async register(email: string, password: string, username?: string) {
     const existingEmail = await prisma.user.findUnique({ where: { email } });
     if (existingEmail) throw new ConflictError('Email already registered');
-    const existingUsername = await prisma.profile.findUnique({ where: { username } });
+    
+    let finalUsername = username ? username.trim() : '';
+    if (!finalUsername) {
+      const prefix = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+      finalUsername = `${prefix}_${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    const existingUsername = await prisma.profile.findUnique({ where: { username: finalUsername } });
     if (existingUsername) throw new ConflictError('Username already taken');
+
+    const gamerzId = await generateUniqueGamerZId();
     const hashedPassword = await hashPassword(password);
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, emailVerified: new Date(), profile: { create: { username } }, notificationSettings: { create: {} } },
+      data: {
+        email,
+        gamerzId,
+        password: hashedPassword,
+        emailVerified: new Date(),
+        profile: { create: { username: finalUsername } },
+        notificationSettings: { create: {} },
+      },
       include: { profile: true },
     });
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
     const refreshToken = generateRefreshToken(payload);
     await prisma.session.create({ data: { refreshToken, userId: user.id, expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) } });
-    return { user: sanitizeUser(user), accessToken, refreshToken };
+    return {
+      user: sanitizeUser(user),
+      accessToken,
+      refreshToken,
+      gamerzId,
+      message: `Your GamerZ ID is ${gamerzId}. This is your unique GamerZ Hub identity.`,
+    };
   }
 
   async login(email: string, password: string) {
@@ -208,6 +232,7 @@ export class AuthService {
         user = await prisma.user.create({
           data: {
             email,
+            gamerzId: await generateUniqueGamerZId(),
             emailVerified: new Date(),
             profile: {
               create: {
@@ -368,6 +393,7 @@ export class AuthService {
         user = await prisma.user.create({
           data: {
             email,
+            gamerzId: await generateUniqueGamerZId(),
             emailVerified: new Date(),
             profile: {
               create: {
@@ -471,6 +497,7 @@ export class AuthService {
       user = await prisma.user.create({
         data: {
           email,
+          gamerzId: await generateUniqueGamerZId(),
           emailVerified: new Date(),
           steamId,
           steamUsername: personaName || username,
@@ -730,6 +757,7 @@ export class AuthService {
       user = await prisma.user.create({
         data: {
           email,
+          gamerzId: await generateUniqueGamerZId(),
           discordId: profile.id,
           discordUsername: profile.username,
           discordDisplayName: profile.globalName || profile.username,
