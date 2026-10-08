@@ -2,268 +2,253 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Gamepad2, Target, Clock, ChevronRight, ChevronLeft, Check, Sparkles } from 'lucide-react';
-import { useMutation } from '@tanstack/react-query';
+import { Input } from '@/components/ui/input';
+import { Gamepad2, Shield, Eye, EyeOff, Loader2, CheckCircle, Sparkles } from 'lucide-react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
-
-const GAMES = [
-  { id: 'valorant', name: 'Valorant', emoji: '🎯' },
-  { id: 'bgmi', name: 'BGMI', emoji: '🔫' },
-  { id: 'freefire', name: 'Free Fire', emoji: '🔥' },
-  { id: 'fortnite', name: 'Fortnite', emoji: '🏗️' },
-  { id: 'apex', name: 'Apex Legends', emoji: '🦊' },
-  { id: 'codm', name: 'COD Mobile', emoji: '💥' },
-  { id: 'minecraft', name: 'Minecraft', emoji: '⛏️' },
-  { id: 'genshin', name: 'Genshin Impact', emoji: '⚔️' },
-  { id: 'pubg', name: 'PUBG PC', emoji: '🪖' },
-  { id: 'lol', name: 'League of Legends', emoji: '🏆' },
-  { id: 'dota2', name: 'Dota 2', emoji: '🐉' },
-  { id: 'cs2', name: 'CS2', emoji: '💣' },
-];
-
-const SKILL_LEVELS = [
-  { id: 'beginner', name: 'Beginner', desc: 'Just getting started', color: 'text-green-400' },
-  { id: 'intermediate', name: 'Intermediate', desc: 'Know the basics', color: 'text-blue-400' },
-  { id: 'advanced', name: 'Advanced', desc: 'Competitive player', color: 'text-purple-400' },
-  { id: 'pro', name: 'Professional', desc: 'Esports level', color: 'text-yellow-400' },
-];
-
-const PLAYSTYLES = [
-  { id: 'competitive', name: 'Competitive', emoji: '🏆' },
-  { id: 'casual', name: 'Casual', emoji: '😎' },
-  { id: 'social', name: 'Social', emoji: '💬' },
-  { id: 'content', name: 'Content Creator', emoji: '🎬' },
-];
-
-const TIMEZONES = [
-  'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Asia/Tokyo',
-  'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles',
-  'Australia/Sydney', 'Pacific/Auckland',
-];
+import { motion } from 'framer-motion';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
-  const [step, setStep] = useState(0);
-  const [selectedGames, setSelectedGames] = useState<string[]>([]);
-  const [skillLevel, setSkillLevel] = useState('');
-  const [playstyle, setPlaystyle] = useState('');
-  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const { user, setUser } = useAuthStore();
+  const [submitting, setSubmitting] = useState(false);
 
-  const saveProfile = useMutation({
-    mutationFn: () => api.post('/profiles/onboarding', {
-      games: selectedGames,
-      skillLevel,
-      playstyle,
-      timezone,
-    }),
-    onSuccess: () => {
-      toast.success('Profile set up! Welcome to GamerZ Hub');
+  // Step 6 New User Game Profile State
+  const [game, setGame] = useState('Free Fire');
+  const [gameUid, setGameUid] = useState('');
+  const [rank, setRank] = useState('Heroic');
+  const [level, setLevel] = useState('50');
+  const [region, setRegion] = useState('ASIA');
+  const [role, setRole] = useState('Rusher');
+  const [availability, setAvailability] = useState('Daily 8pm-11pm');
+  const [isPublic, setIsPublic] = useState(true);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gameUid.trim()) {
+      toast.error('Please enter your In-Game UID.');
+      return;
+    }
+    setSubmitting(true);
+
+    try {
+      // Uses the SAME backend profile system endpoint as existing-user profile completion
+      const res = await api.post('/profiles/setup-game', {
+        game,
+        gameUid: gameUid.trim(),
+        rank,
+        level: parseInt(level, 10) || 50,
+        region,
+        role,
+        availability,
+        isPrimary: true,
+        allowComparison: isPublic,
+      });
+
+      const updatedData = res.data?.data;
+      toast.success('Gamer Profile Saved Successfully!');
+
+      if (user && updatedData?.profile) {
+        setUser({
+          ...user,
+          gamerzId: updatedData.gamerzId || user.gamerzId,
+          profile: {
+            ...(user.profile || {}),
+            ...updatedData.profile,
+          } as any,
+        });
+      }
+
       router.push('/feed');
-    },
-    onError: () => {
-      toast.error('Failed to save preferences');
-    },
-  });
-
-  const toggleGame = (id: string) => {
-    setSelectedGames((prev) =>
-      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
-    );
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to save gamer profile.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const steps = [
-    {
-      title: 'Pick your games',
-      desc: 'Select the games you play',
-      icon: Gamepad2,
-      content: (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {GAMES.map((game) => (
-            <button
-              key={game.id}
-              onClick={() => toggleGame(game.id)}
-              className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
-                selectedGames.includes(game.id)
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:border-border/80 text-muted-foreground'
-              }`}
-            >
-              <span className="text-2xl">{game.emoji}</span>
-              <div>
-                <p className="text-sm font-medium">{game.name}</p>
-                {selectedGames.includes(game.id) && (
-                  <Check className="h-3 w-3 text-primary" />
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-      ),
-    },
-    {
-      title: 'Skill level',
-      desc: 'How competitive are you?',
-      icon: Target,
-      content: (
-        <div className="grid grid-cols-2 gap-3">
-          {SKILL_LEVELS.map((level) => (
-            <button
-              key={level.id}
-              onClick={() => setSkillLevel(level.id)}
-              className={`p-4 rounded-xl border-2 text-left transition-all ${
-                skillLevel === level.id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-border/80'
-              }`}
-            >
-              <p className={`text-sm font-bold ${level.color}`}>{level.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">{level.desc}</p>
-            </button>
-          ))}
-        </div>
-      ),
-    },
-    {
-      title: 'Playstyle',
-      desc: 'What brings you here?',
-      icon: Sparkles,
-      content: (
-        <div className="grid grid-cols-2 gap-3">
-          {PLAYSTYLES.map((ps) => (
-            <button
-              key={ps.id}
-              onClick={() => setPlaystyle(ps.id)}
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                playstyle === ps.id
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:border-border/80 text-muted-foreground'
-              }`}
-            >
-              <span className="text-2xl">{ps.emoji}</span>
-              <span className="text-sm font-medium">{ps.name}</span>
-            </button>
-          ))}
-        </div>
-      ),
-    },
-    {
-      title: 'Timezone',
-      desc: 'For tournament scheduling',
-      icon: Clock,
-      content: (
-        <div className="space-y-2">
-          {TIMEZONES.map((tz) => (
-            <button
-              key={tz}
-              onClick={() => setTimezone(tz)}
-              className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
-                timezone === tz
-                  ? 'border-primary bg-primary/5 text-primary font-medium'
-                  : 'border-border hover:border-border/80 text-muted-foreground'
-              }`}
-            >
-              {tz.replace('/', ' / ').replace('_', ' ')}
-            </button>
-          ))}
-        </div>
-      ),
-    },
-  ];
-
-  const current = steps[step];
-  const canProceed = step === 0 ? selectedGames.length > 0 : step === 1 ? !!skillLevel : step === 2 ? !!playstyle : true;
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-lg">
-        <CardContent className="p-6 space-y-6">
-          {/* Progress */}
-          <div className="flex items-center gap-2">
-            {steps.map((_, i) => (
-              <div
-                key={i}
-                className={`h-1.5 flex-1 rounded-full transition-all ${
-                  i <= step ? 'bg-primary' : 'bg-muted'
-                }`}
-              />
-            ))}
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#05070E] text-white">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-xl rounded-3xl border border-emerald-500/30 bg-[#070A11]/95 p-6 sm:p-8 shadow-2xl shadow-emerald-950/50 space-y-6"
+      >
+        {/* Header */}
+        <div className="text-center space-y-2 border-b border-white/10 pb-5">
+          <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-400 text-xs font-bold">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span>STEP 6 — NEW USER GAME PROFILE</span>
           </div>
-
-          {/* Header */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <current.icon className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-bold">{current.title}</h2>
-            </div>
-            <p className="text-sm text-muted-foreground">{current.desc}</p>
-          </div>
-
-          {/* Content */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, x: 15 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -15 }}
-              transition={{ duration: 0.15 }}
-              className="max-h-[40vh] overflow-y-auto pr-1"
-            >
-              {current.content}
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Navigation */}
-          <div className="flex items-center justify-between pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => setStep((s) => s - 1)}
-              disabled={step === 0}
-              className="gap-1"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Back
-            </Button>
-
-            {step < steps.length - 1 ? (
-              <Button
-                onClick={() => setStep((s) => s + 1)}
-                disabled={!canProceed}
-                className="gap-1"
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={() => saveProfile.mutate()}
-                disabled={saveProfile.isPending}
-                className="gap-2"
-              >
-                {saveProfile.isPending ? 'Saving...' : 'Get Started'}
-                <Sparkles className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          {/* Skip */}
-          {step < steps.length - 1 && (
-            <div className="text-center">
-              <button
-                onClick={() => router.push('/feed')}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Skip for now
-              </button>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+            Complete Your Gamer Profile
+          </h1>
+          {user?.gamerzId && (
+            <div className="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-400 font-bold bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-500/30">
+              <Shield className="w-3.5 h-3.5" />
+              <span>GamerZ ID: {user.gamerzId}</span>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-5 text-xs">
+          {/* Game Selection Buttons */}
+          <div className="space-y-2">
+            <label className="block text-gray-200 font-bold text-xs">Game</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {['Free Fire', 'PUBG', 'Valorant', 'CS2', 'Apex Legends', 'League of Legends'].map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGame(g)}
+                  className={`h-10 rounded-xl font-bold text-xs border transition-all flex items-center justify-center gap-2 px-3 ${
+                    game === g
+                      ? 'bg-emerald-500 text-black border-emerald-400 shadow-md shadow-emerald-500/20'
+                      : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <Gamepad2 className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{g}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Game UID */}
+          <div className="space-y-1.5">
+            <label className="block text-gray-300 font-semibold">Game UID *</label>
+            <Input
+              type="text"
+              required
+              placeholder="Enter your Game UID (e.g. 518492041)"
+              value={gameUid}
+              onChange={(e) => setGameUid(e.target.value)}
+              className="h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-white focus:border-emerald-400 outline-none placeholder:text-gray-500 font-mono"
+            />
+          </div>
+
+          {/* Rank & Level */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="block text-gray-300 font-semibold">Rank</label>
+              <select
+                value={rank}
+                onChange={(e) => setRank(e.target.value)}
+                className="w-full h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-white focus:border-emerald-400 outline-none"
+              >
+                <option value="Grandmaster" className="bg-slate-900">Grandmaster</option>
+                <option value="Heroic" className="bg-slate-900">Heroic / Master</option>
+                <option value="Ace" className="bg-slate-900">Ace / Radiant</option>
+                <option value="Diamond" className="bg-slate-900">Diamond II - IV</option>
+                <option value="Ascendant" className="bg-slate-900">Ascendant I - III</option>
+                <option value="Platinum" className="bg-slate-900">Platinum</option>
+                <option value="Gold" className="bg-slate-900">Gold</option>
+                <option value="Silver" className="bg-slate-900">Silver / Bronze</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-gray-300 font-semibold">Level</label>
+              <Input
+                type="number"
+                placeholder="Level (e.g. 65)"
+                value={level}
+                onChange={(e) => setLevel(e.target.value)}
+                className="h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-white focus:border-emerald-400 outline-none font-mono"
+              />
+            </div>
+          </div>
+
+          {/* Region & Role */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="block text-gray-300 font-semibold">Region</label>
+              <select
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                className="w-full h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-white focus:border-emerald-400 outline-none"
+              >
+                <option value="ASIA" className="bg-slate-900">Asia / India</option>
+                <option value="NA-East" className="bg-slate-900">NA-East</option>
+                <option value="NA-West" className="bg-slate-900">NA-West</option>
+                <option value="EU" className="bg-slate-900">Europe</option>
+                <option value="SA" className="bg-slate-900">South America</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-gray-300 font-semibold">Role</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-white focus:border-emerald-400 outline-none"
+              >
+                <option value="Rusher" className="bg-slate-900">Rusher / Entry Fragger</option>
+                <option value="IGL" className="bg-slate-900">IGL (In-Game Leader)</option>
+                <option value="Sniper" className="bg-slate-900">Sniper / Marksman</option>
+                <option value="Support" className="bg-slate-900">Support / Sentinel</option>
+                <option value="Flex" className="bg-slate-900">Flex Controller</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Availability */}
+          <div className="space-y-1.5">
+            <label className="block text-gray-300 font-semibold">Availability</label>
+            <select
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value)}
+              className="w-full h-11 rounded-xl border border-white/15 bg-white/5 px-3 text-white focus:border-emerald-400 outline-none"
+            >
+              <option value="Daily 8pm-11pm" className="bg-slate-900">Daily Evenings (8 PM - 11 PM)</option>
+              <option value="Weekends Only" className="bg-slate-900">Weekends Only</option>
+              <option value="Full Time / Flexible" className="bg-slate-900">Full Time / Flexible Hours</option>
+              <option value="Late Night" className="bg-slate-900">Late Night (11 PM - 3 AM)</option>
+            </select>
+          </div>
+
+          {/* Profile Visibility */}
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3.5">
+            <div>
+              <p className="font-bold text-white text-xs flex items-center gap-1.5">
+                {isPublic ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-amber-400" />}
+                Profile visibility
+              </p>
+              <p className="text-[11px] text-gray-400">
+                {isPublic ? 'Public — Discoverable for squads & matchmaking' : 'Private — Hidden from public player search'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPublic(!isPublic)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                isPublic
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+              }`}
+            >
+              {isPublic ? 'Public' : 'Private'}
+            </button>
+          </div>
+
+          {/* Save Button */}
+          <Button
+            type="submit"
+            disabled={submitting}
+            className="w-full h-12 rounded-xl font-extrabold bg-gradient-to-r from-emerald-500 to-teal-500 text-black hover:brightness-110 shadow-lg shadow-emerald-500/25 text-sm"
+          >
+            {submitting ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" /> Saving Profile...
+              </span>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </form>
+      </motion.div>
     </div>
   );
 }

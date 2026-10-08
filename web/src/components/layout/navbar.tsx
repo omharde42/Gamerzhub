@@ -22,9 +22,9 @@ import { SearchOverlay } from '@/components/search/search-overlay';
 import {
   Search, Bell, MessageSquare, Users,
   LogOut, User, Settings, Home, ChevronDown,
-  Bookmark, Shield, Gamepad2 as GamepadIcon, MoreHorizontal,
+  Bookmark, Shield, Gamepad2 as GamepadIcon, MoreHorizontal, MoreVertical,
   Globe, Sun, Moon, Menu, X, Newspaper, Film,
-  Trophy, UserCheck
+  Trophy, UserCheck, ShoppingBag, Bot, CircleHelp
 } from 'lucide-react';
 
 const navIcons = [
@@ -142,26 +142,76 @@ export function Navbar({ hidden = false }: { hidden?: boolean }) {
       >
       <div className="w-full mx-auto flex h-16 items-center px-4 md:px-6 gap-2 md:gap-3">
 
-        {/* Left Side Menu Button: Trigger side drawer on mobile, brand on desktop */}
-        <div className="flex md:hidden shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setDrawerOpen(true)}
-            className="h-11 w-11 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/40"
-            aria-label="More options"
-          >
-            <MoreHorizontal className="h-6 w-6" />
-          </Button>
-        </div>
+        {/* Top-Left Three-Dot GamerZ Menu (Works on both Mobile & Desktop) */}
+        <div className="flex items-center gap-2 shrink-0">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-emerald-400 shrink-0 shadow-sm"
+                aria-label="GamerZ Menu"
+              >
+                <MoreVertical className="h-5 w-5 text-emerald-400" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64 bg-[#070A11]/95 border-emerald-500/30 text-white backdrop-blur-2xl p-2 rounded-2xl shadow-2xl space-y-1">
+              <div className="p-3 border-b border-white/10 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-sm text-emerald-400">GamerZ Menu</span>
+                  {user?.gamerzId && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30">
+                      {user.gamerzId}
+                    </span>
+                  )}
+                </div>
+                {user && <p className="text-[11px] text-gray-400 truncate">@{user?.profile?.username || 'Gamer'}</p>}
+              </div>
 
-        {/* Desktop Brand Logo */}
-        <Link href="/dashboard" className="hidden md:flex items-center gap-2.5 shrink-0 group">
-          <div className="w-9 h-9 rounded-xl overflow-hidden border border-primary/20 shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:border-primary/40 shrink-0">
-            <img src="/logo.webp" alt="GamerZ Hub" className="w-full h-full object-cover" />
-          </div>
-          <span className="text-base font-extrabold hidden sm:block text-foreground group-hover:text-primary transition-colors tracking-tight">GamerZ Hub</span>
-        </Link>
+              <DropdownMenuItem onSelect={() => router.push(user?.profile?.username ? `/profile/${user.profile.username}` : '/feed')}>
+                <User className="h-4 w-4 mr-2.5 text-emerald-400" /> Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/profile/settings')}>
+                <Settings className="h-4 w-4 mr-2.5 text-emerald-400" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/friends')}>
+                <Users className="h-4 w-4 mr-2.5 text-emerald-400" /> Friends
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/tournaments')}>
+                <Trophy className="h-4 w-4 mr-2.5 text-emerald-400" /> Tournaments
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/arcade')}>
+                <ShoppingBag className="h-4 w-4 mr-2.5 text-emerald-400" /> Marketplace
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/ai-coach')}>
+                <Bot className="h-4 w-4 mr-2.5 text-emerald-400" /> AI Assistant
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openPanelFromNav('notifications')}>
+                <Bell className="h-4 w-4 mr-2.5 text-emerald-400" /> Notifications
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/community-guidelines')}>
+                <CircleHelp className="h-4 w-4 mr-2.5 text-emerald-400" /> Help
+              </DropdownMenuItem>
+
+              {user && (
+                <>
+                  <DropdownMenuSeparator className="bg-white/10" />
+                  <DropdownMenuItem onSelect={handleLogout} className="text-red-400 focus:text-red-300 focus:bg-red-500/10">
+                    <LogOut className="h-4 w-4 mr-2.5" /> Logout
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Desktop Brand Logo */}
+          <Link href="/dashboard" className="hidden sm:flex items-center gap-2 shrink-0 group">
+            <div className="w-8 h-8 rounded-xl overflow-hidden border border-primary/20 shadow-sm transition-all duration-300 group-hover:scale-105 group-hover:border-primary/40 shrink-0">
+              <img src="/logo.webp" alt="GamerZ Hub" className="w-full h-full object-cover" />
+            </div>
+            <span className="text-sm font-extrabold hidden md:block text-foreground group-hover:text-primary transition-colors tracking-tight">GamerZ Hub</span>
+          </Link>
+        </div>
 
         {/* Center: Maximized Search Bar on mobile & desktop, opens dedicated search interface instantly */}
         <div className="flex relative flex-1 mx-1 md:mx-0 max-w-full md:max-w-sm cursor-pointer" onClick={() => setIsSearchOpen(true)}>

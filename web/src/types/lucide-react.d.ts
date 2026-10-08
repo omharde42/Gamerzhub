@@ -204,4 +204,8 @@ export const GitBranch: Icon;
   export const Timer: Icon;
   export const Joystick: Icon;
   export const Dices: Icon;
+  export const Store: Icon;
+  export const ShoppingBag: Icon;
+  export const HelpCircle: Icon;
+  export const CircleHelp: Icon;
 }

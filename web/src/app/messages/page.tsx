@@ -665,7 +665,7 @@ function DiscordMessagesPage() {
   return (
     <div className={cn(
       "flex border-0 md:border border-white/70 dark:border-white/10 rounded-none md:rounded-[32px] overflow-hidden bg-gradient-to-tr from-sky-200/90 via-purple-200/80 to-pink-200/90 dark:from-slate-950 dark:via-purple-950/80 dark:to-slate-900 backdrop-blur-2xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.15)] w-full max-w-full md:max-w-7xl mx-auto relative group/container p-0 md:p-3 gap-0 md:gap-3.5",
-      selectedChat ? "fixed inset-0 z-40 bg-background md:relative md:inset-auto md:z-auto h-dvh md:h-[calc(100vh-6.5rem)]" : "h-dvh md:h-[calc(100vh-6.5rem)]"
+      selectedChat ? "fixed inset-0 z-40 bg-background md:relative md:inset-auto md:z-auto h-dvh md:h-[calc(100vh-5rem)]" : "h-dvh md:h-[calc(100vh-5rem)]"
     )}>
       {/* Server sidebar (Desktop only) */}
       <div className="w-16 bg-muted/40 border-r border-border/40 hidden md:flex flex-col items-center py-4 gap-3 shrink-0">
