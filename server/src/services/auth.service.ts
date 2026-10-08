@@ -7,7 +7,7 @@ import { redis } from '../config/redis';
 import { config } from '../config';
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
-import { generateUniqueGamerZId } from '../utils/gamerzId';
+import { generateUniqueGamerZId, ensureUserGamerZId } from '../utils/gamerzId';
 
 export class AuthService {
   async register(email: string, password: string, username?: string) {
@@ -59,6 +59,8 @@ export class AuthService {
     const isValid = await comparePassword(password, user.password);
     if (!isValid) throw new UnauthorizedError('Invalid credentials');
     if (user.banned) throw new UnauthorizedError(`Account banned: ${user.banReason || 'No reason provided'}`);
+    const gamerzId = await ensureUserGamerZId(user);
+    user.gamerzId = gamerzId;
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
     const refreshToken = generateRefreshToken(payload);
@@ -263,6 +265,8 @@ export class AuthService {
     if (user.banned) {
       throw new UnauthorizedError(`Account banned: ${user.banReason || 'No reason provided'}`);
     }
+    const gamerzId = await ensureUserGamerZId(user);
+    user.gamerzId = gamerzId;
 
     // 4. Generate our standard app access/refresh tokens
     const payload = { userId: user.id, email: user.email, role: user.role };
@@ -424,6 +428,8 @@ export class AuthService {
     if (user.banned) {
       throw new UnauthorizedError(`Account banned: ${user.banReason || 'No reason provided'}`);
     }
+    const gamerzId = await ensureUserGamerZId(user);
+    user.gamerzId = gamerzId;
 
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
@@ -533,6 +539,8 @@ export class AuthService {
     if (user.banned) {
       throw new UnauthorizedError(`Account banned: ${user.banReason || 'No reason provided'}`);
     }
+    const gamerzId = await ensureUserGamerZId(user);
+    user.gamerzId = gamerzId;
 
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
@@ -822,6 +830,8 @@ export class AuthService {
     if (user.banned) {
       throw new UnauthorizedError(`Account banned: ${user.banReason || 'No reason provided'}`);
     }
+    const gamerzId = await ensureUserGamerZId(user);
+    user.gamerzId = gamerzId;
 
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
