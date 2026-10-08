@@ -37,12 +37,16 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     const statusMap: Record<string, number> = {
       P2002: 409,
       P2003: 400,
+      P2021: 500,
+      P2022: 500,
       P2023: 400,
       P2025: 404,
     };
     const messageMap: Record<string, string> = {
       P2002: 'A record with these details already exists',
       P2003: 'Invalid reference provided',
+      P2021: 'Database table missing. Please run database migrations on server.',
+      P2022: 'Database column missing. Please run database migrations on server.',
       P2023: 'Invalid data provided',
       P2025: 'Record not found',
     };
