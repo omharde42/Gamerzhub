@@ -175,21 +175,9 @@ app.get('/ready', async (_req, res) => {
 });
 app.get('/ready/migrate', async (_req, res) => {
   try {
-    const { execSync } = require('child_process');
-    const path = require('path');
-    const prismaCli = path.resolve(__dirname, '../node_modules/prisma/build/index.js');
-    let output = '';
-    try {
-      output += execSync(`node "${prismaCli}" migrate deploy`, { encoding: 'utf8', env: process.env });
-    } catch (e: any) {
-      output += `[Migrate Deploy Note] ${e?.message}\n`;
-    }
-    try {
-      output += execSync(`node "${prismaCli}" db push --accept-data-loss`, { encoding: 'utf8', env: process.env });
-    } catch (e: any) {
-      output += `[DB Push Note] ${e?.message}\n`;
-    }
-    res.status(200).json({ success: true, message: 'Database schema migrated and synchronized successfully 🚀', output });
+    const { applyRawMigrations } = require('./scripts/autoMigrate');
+    const result = await applyRawMigrations();
+    res.status(200).json({ success: true, message: 'Database schema migrated and synchronized successfully 🚀', result });
   } catch (err: any) {
     res.status(500).json({ success: false, message: 'Migration execution failed', error: err?.message || String(err) });
   }
@@ -259,23 +247,20 @@ httpServer.listen(config.port, () => {
   console.log(`GamerHub API running on port ${config.port}`);
   console.log(`Environment: ${config.nodeEnv}`);
 
-  // Automatically synchronize database schema on production boot to ensure all columns exist
+  // Automatically synchronize database schema DDL on production boot using active DB connection
   try {
-    const { exec } = require('child_process');
-    exec('npx prisma db push --accept-data-loss', (err: any, stdout: any, stderr: any) => {
-      if (err) {
-        console.warn('[AutoSchemaSync] Schema push warning:', err?.message || stderr);
-      } else {
+    const { applyRawMigrations } = require('./scripts/autoMigrate');
+    applyRawMigrations()
+      .then(() => {
         console.log('[AutoSchemaSync] Production database schema synchronized successfully 🚀');
-        // Backfill GamerZ IDs after schema push succeeds
         try {
           const { backfillGamerZIds } = require('./scripts/backfillGamerZId');
           backfillGamerZIds().catch((err: any) => console.error('[backfillGamerZIds]', err?.message));
         } catch (e: any) {
           console.warn('[backfillGamerZIds] Skipped backfill:', e?.message);
         }
-      }
-    });
+      })
+      .catch((err: any) => console.warn('[AutoSchemaSync Warn]', err?.message));
   } catch (e: any) {
     console.warn('[AutoSchemaSync] Skipped auto schema sync:', e?.message);
   }
