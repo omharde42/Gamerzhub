@@ -15,208 +15,89 @@ import { useAuthStore } from '@/store/authStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { GAMES, ROLES, PLAY_STYLES, COMMUNICATION_STYLES, LANGUAGES, API_URL } from '@/lib/constants';
+import { GAMES, ROLES, API_URL } from '@/lib/constants';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
-import { Shield, Bell, User, Gamepad2, X, Loader2, CheckCircle2, Circle, Sparkles, Trophy, Camera, Gauge, Scale } from 'lucide-react';
+import { Shield, Bell, User, Gamepad2, X, Loader2, Sparkles, Camera, Eye, EyeOff, Upload, CheckCircle2, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { BackHeader } from '@/components/common/back-header';
 import { AdvancedSettingsTab } from '@/components/settings/advanced-settings';
 import { LegalSettingsTab } from '@/components/settings/legal-settings';
- 
+import { uploadMediaFile } from '@/lib/upload';
+
 export default function SettingsPage() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
   const queryClient = useQueryClient();
 
-  const [profile, setProfile] = useState({
-    displayName: user?.profile?.displayName || '',
-    bio: user?.profile?.bio || '',
-    country: user?.profile?.country || '',
-    city: (user?.profile as any)?.city || '',
-    playStyle: user?.profile?.playStyle || '',
-    communicationStyle: user?.profile?.communicationStyle || '',
-    rank: user?.profile?.rank || '',
-    role: user?.profile?.role || '',
-    twitch: user?.profile?.twitch || '',
-    youtube: user?.profile?.youtube || '',
-    discord: user?.profile?.discord || '',
-    twitter: user?.profile?.twitter || '',
-    mainGames: user?.profile?.mainGames || [],
-    languages: user?.profile?.languages || [],
-    activeTime: user?.profile?.activeTime || '',
-  });
+  // Profile Form States
+  const [game, setGame] = useState('Free Fire');
+  const [gameUid, setGameUid] = useState('');
+  const [displayName, setDisplayName] = useState(user?.profile?.displayName || '');
+  const [rank, setRank] = useState('Heroic');
+  const [level, setLevel] = useState('50');
+  const [region, setRegion] = useState('ASIA');
+  const [role, setRole] = useState('Rusher');
+  const [bio, setBio] = useState(user?.profile?.bio || '');
+  const [isPublic, setIsPublic] = useState(user?.profile?.allowComparison !== false);
 
-  const [newGame, setNewGame] = useState('');
-  const [newLang, setNewLang] = useState('');
+  // ID Screenshot Proof State
+  const [screenshotUrl, setScreenshotUrl] = useState<string>('');
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  const [screenshotProgress, setScreenshotProgress] = useState(0);
 
-  // Sync state if user rehydrates or loads
-  useEffect(() => {
-    if (user?.profile) {
-      setProfile({
-        displayName: user.profile.displayName || '',
-        bio: user.profile.bio || '',
-        country: user.profile.country || '',
-        city: (user.profile as any).city || '',
-        playStyle: user.profile.playStyle || '',
-        communicationStyle: user.profile.communicationStyle || '',
-        rank: user.profile.rank || '',
-        role: user.profile.role || '',
-        twitch: user.profile.twitch || '',
-        youtube: user.profile.youtube || '',
-        discord: user.profile.discord || '',
-        twitter: user.profile.twitter || '',
-        mainGames: user.profile.mainGames || [],
-        languages: user.profile.languages || [],
-        activeTime: user.profile.activeTime || '',
-      });
-    }
-  }, [user]);
-
-  // Calculate setup checklist details
-  const checklistItems = [
-    { label: 'Profile Picture', checked: !!user?.profile?.avatar, weight: 15 },
-    { label: 'Gaming Name / Tag', checked: !!profile.displayName.trim(), weight: 20 },
-    { label: 'Bio / Bio Summary', checked: !!profile.bio.trim(), weight: 15 },
-    { label: 'Country', checked: !!profile.country.trim(), weight: 15 },
-    { label: 'Favorite Games', checked: profile.mainGames.length > 0, weight: 20 },
-    { label: 'Social & Messaging Links', checked: !!(profile.discord || profile.twitch || profile.youtube || profile.twitter), weight: 15 },
-  ];
-
-  const totalProgress = checklistItems.reduce((acc, item) => acc + (item.checked ? item.weight : 0), 0);
-  
-  // Core setup items required to view feed
-  const coreSetupCompleted = 
-    !!profile.displayName.trim() && 
-    !!profile.bio.trim() && 
-    !!profile.country.trim() && 
-    profile.mainGames.length > 0;
-
-  const updateProfile = useMutation({
-    mutationFn: () => api.put('/profiles', profile),
-    onSuccess: (res: any) => {
-      const updated = res.data.data;
-      setUser({ ...user, profile: updated } as any);
-      
-      const username = updated.username || user?.profile?.username || (user as any)?.username;
-      
-      queryClient.invalidateQueries({ queryKey: ['profile', username] });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      
-      toast.success('Profile updated successfully!', { id: 'profile-save-success', duration: 3000 });
-      router.push(`/profile/${username}`);
-    },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update profile')
-  });
-
-  const { data: linkedData, refetch: refetchAccounts } = useQuery({
-    queryKey: ['linked-accounts'],
-    queryFn: () => api.get('/auth/accounts').then((r) => r.data.data).catch(() => null),
-    enabled: !!user,
-  });
-
-  const linkedAccounts = linkedData?.accounts || (Array.isArray(linkedData) ? linkedData : []);
-  const discordData = linkedData?.discord;
-  const steamData = linkedData?.steam;
-
-  const disconnectDiscord = useMutation({
-    mutationFn: () => api.post('/auth/discord/disconnect'),
-    onSuccess: () => {
-      refetchAccounts();
-      toast.success('Discord account unlinked successfully');
-    },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to disconnect Discord');
-    },
-  });
-
-  const disconnectSteam = useMutation({
-    mutationFn: () => api.post('/steam/disconnect'),
-    onSuccess: () => {
-      refetchAccounts();
-      toast.success('Steam account unlinked successfully');
-    },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to disconnect Steam');
-    },
-  });
-
-  const unlinkAccount = useMutation({
-    mutationFn: (provider: string) => api.post('/auth/accounts/unlink', { provider }),
-    onSuccess: (_, provider) => {
-      refetchAccounts();
-      toast.success(`${provider} account unlinked successfully`);
-    },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to unlink account');
-    },
-  });
-
-  const handleLinkSocial = async (provider: string) => {
-    if (provider === 'discord') {
-      // Authenticated initiation: the server signs a state bound to the current
-      // user, so the link can never be hijacked to attach to another account.
-      try {
-        const { data } = await api.post('/auth/discord/link');
-        if (data?.data?.url) {
-          window.location.href = data.data.url;
-        } else if (data?.data?.linked) {
-          refetchAccounts();
-          toast.success('Discord account linked successfully');
-        }
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || 'Failed to start Discord linking');
-      }
-      return;
-    }
-    if (provider === 'steam') {
-      // External OAuth redirect to the backend — full navigation is required.
-      window.location.href = API_URL + '/auth/steam';
-      return;
-    }
-    try {
-      const { supabase } = await import('@/lib/supabase');
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: provider as any,
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
-      });
-      if (error) throw error;
-    } catch (err: any) {
-      toast.error(err.message || `Failed to link ${provider}`);
-    }
-  };
-
-  const handleSave = () => {
-    if (!profile.displayName.trim()) {
-      toast.error('Gaming Display Name is required');
-      return;
-    }
-    if (!profile.country.trim()) {
-      toast.error('Country is required');
-      return;
-    }
-    if (!profile.bio.trim()) {
-      toast.error('Bio Summary is required');
-      return;
-    }
-    if (profile.mainGames.length === 0) {
-      toast.error('At least one connected game is required');
-      return;
-    }
-    updateProfile.mutate();
-  };
-
+  // Avatar Upload State
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarProgress, setAvatarProgress] = useState(0);
 
+  // Submitting state
+  const [submitting, setSubmitting] = useState(false);
+
+  // Sync initial user state
+  useEffect(() => {
+    if (user?.profile) {
+      if (user.profile.displayName) setDisplayName(user.profile.displayName);
+      if (user.profile.bio) setBio(user.profile.bio);
+      if (user.profile.rank) setRank(user.profile.rank);
+      if (user.profile.role) setRole(user.profile.role);
+      if (user.profile.country) setRegion(user.profile.country);
+      if (user.profile.allowComparison !== undefined) setIsPublic(user.profile.allowComparison);
+    }
+  }, [user]);
+
+  // Handle ID Screenshot Proof File Change
+  const handleScreenshotChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingScreenshot(true);
+    setScreenshotProgress(10);
+    try {
+      const url = await uploadMediaFile(file, {
+        endpoint: '/posts/upload',
+        folder: 'chat',
+        fieldName: 'media',
+        onProgress: (p) => setScreenshotProgress(p),
+      });
+      setScreenshotUrl(url);
+      toast.success('ID Screenshot proof uploaded successfully!');
+    } catch (err: any) {
+      console.error('Screenshot upload error:', err);
+      toast.error(err.message || 'Failed to upload screenshot proof.');
+    } finally {
+      setUploadingScreenshot(false);
+      setScreenshotProgress(0);
+    }
+  };
+
+  // Handle Avatar Change
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setAvatarUploading(true);
-    setAvatarProgress(5);
+    setAvatarProgress(10);
     try {
-      const { uploadMediaFile } = await import('@/lib/upload');
       const avatarUrl = await uploadMediaFile(file, {
         endpoint: '/profiles/avatar',
         fieldName: 'avatar',
@@ -232,384 +113,481 @@ export default function SettingsPage() {
       toast.success('Avatar updated successfully!');
     } catch (err: any) {
       console.error('Avatar upload failed:', err);
-      toast.error(err.message || 'Failed to upload avatar. Please try again.');
+      toast.error(err.message || 'Failed to upload avatar.');
     } finally {
       setAvatarUploading(false);
       setAvatarProgress(0);
     }
   };
 
-  const addGame = () => {
-    if (newGame && !profile.mainGames.includes(newGame)) {
-      setProfile({ ...profile, mainGames: [...profile.mainGames, newGame] });
-      setNewGame('');
+  // Connected Accounts Query & Mutations
+  const { data: linkedData, refetch: refetchAccounts } = useQuery({
+    queryKey: ['linked-accounts'],
+    queryFn: () => api.get('/auth/accounts').then((r) => r.data.data).catch(() => null),
+    enabled: !!user,
+  });
+
+  const linkedAccounts = linkedData?.accounts || (Array.isArray(linkedData) ? linkedData : []);
+  const discordData = linkedData?.discord;
+  const steamData = linkedData?.steam;
+
+  const disconnectDiscord = useMutation({
+    mutationFn: () => api.post('/auth/discord/disconnect'),
+    onSuccess: () => {
+      refetchAccounts();
+      toast.success('Discord account unlinked');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to disconnect Discord'),
+  });
+
+  const disconnectSteam = useMutation({
+    mutationFn: () => api.post('/steam/disconnect'),
+    onSuccess: () => {
+      refetchAccounts();
+      toast.success('Steam account unlinked');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to disconnect Steam'),
+  });
+
+  const handleLinkSocial = async (provider: string) => {
+    if (provider === 'discord') {
+      try {
+        const { data } = await api.post('/auth/discord/link');
+        if (data?.data?.url) {
+          window.location.href = data.data.url;
+        } else if (data?.data?.linked) {
+          refetchAccounts();
+          toast.success('Discord account linked');
+        }
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to start Discord link');
+      }
+      return;
+    }
+    if (provider === 'steam') {
+      window.location.href = API_URL + '/auth/steam';
+      return;
+    }
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: provider as any,
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast.error(err.message || `Failed to link ${provider}`);
     }
   };
 
-  const addLang = () => {
-    if (newLang && !profile.languages.includes(newLang)) {
-      setProfile({ ...profile, languages: [...profile.languages, newLang] });
-      setNewLang('');
+  // Submit Main Simple Profile Form
+  const handleSubmitProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!gameUid.trim()) {
+      toast.error('Please enter your In-Game UID.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // 1. Save game profile data to /api/profiles/setup-game
+      const res = await api.post('/profiles/setup-game', {
+        game,
+        gameUid: gameUid.trim(),
+        inGameName: displayName || undefined,
+        rank,
+        level: parseInt(level, 10) || 50,
+        region,
+        role,
+        isPrimary: true,
+        allowComparison: isPublic,
+      });
+
+      // 2. Update general profile fields
+      const updatedProfileRes = await api.put('/profiles', {
+        displayName: displayName.trim() || user?.profile?.displayName,
+        bio: bio.trim() || user?.profile?.bio,
+        country: region,
+        rank,
+        role,
+        mainGames: [game],
+        allowComparison: isPublic,
+      });
+
+      const updatedData = res.data?.data;
+      const updatedProfile = updatedProfileRes.data?.data;
+
+      toast.success('Profile Saved Successfully!');
+
+      if (user) {
+        setUser({
+          ...user,
+          gamerzId: updatedData?.gamerzId || user.gamerzId,
+          profile: {
+            ...(user.profile || {}),
+            ...updatedProfile,
+          } as any,
+        });
+      }
+
+      const currentUsername = updatedProfile?.username || user?.profile?.username || (user as any)?.username;
+
+      if (currentUsername) {
+        queryClient.invalidateQueries({ queryKey: ['profile', currentUsername] });
+        queryClient.invalidateQueries({ queryKey: ['profile'] });
+        router.push(`/profile/${currentUsername}`);
+      } else {
+        router.push('/feed');
+      }
+    } catch (err: any) {
+      console.error('Profile save error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to save gamer profile.');
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  const gameOptions = ['Free Fire', 'PUBG', 'Valorant', 'CS2', 'Apex Legends', 'Fortnite', 'League of Legends', 'Clash of Clans'];
+  const roleOptions = [
+    { label: 'Player', value: 'Player' },
+    { label: 'Creator', value: 'Creator' },
+    { label: 'Gamer', value: 'Gamer' },
+    { label: 'Rusher / Entry', value: 'Rusher' },
+    { label: 'IGL (Leader)', value: 'IGL' },
+    { label: 'Sniper', value: 'Sniper' },
+    { label: 'Support', value: 'Support' },
+    { label: 'Flex', value: 'Flex' },
+  ];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Back navigation button */}
+      {/* Back Header */}
       <BackHeader title="Settings" />
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">Passport Settings</h1>
-        {!coreSetupCompleted && (
-          <Badge variant="neon" className="animate-pulse gap-1"><Sparkles className="h-3 w-3" /> Setup Mode</Badge>
+      {/* Main Header with GamerZ ID */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card/60 backdrop-blur-md p-5 rounded-2xl border border-border/60">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-black text-foreground tracking-tight flex items-center gap-2">
+            <Gamepad2 className="h-6 w-6 text-primary" />
+            Gamer Profile Setup & Settings
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Set up your game UID, rank, role, and screenshot proof so other gamers can view your public profile.
+          </p>
+        </div>
+        {user?.gamerzId && (
+          <div className="inline-flex items-center gap-2 text-xs font-mono font-bold text-emerald-400 bg-emerald-950/40 px-3.5 py-1.5 rounded-xl border border-emerald-500/30 shrink-0">
+            <Shield className="w-4 h-4 text-emerald-400" />
+            <span>GamerZ ID: {user.gamerzId}</span>
+          </div>
         )}
       </div>
 
-      {/* Gamified Setup Progress Card */}
-      <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-        <Card variant="glass" className="border-primary/30 relative overflow-hidden shadow-lg shadow-primary/5">
-          <div className="absolute top-0 right-0 w-36 h-36 bg-primary/[0.02] rounded-full -translate-y-1/2 translate-x-1/2" />
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-primary" />
-                Gamer Passport Completion
-              </span>
-              <span className="text-primary font-extrabold">{totalProgress}%</span>
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Complete your profile setup to activate your Gamer Passport and unlock the main community feed.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="w-full h-2.5 bg-muted/60 rounded-full overflow-hidden border border-border/50">
-              <motion.div
-                className="h-full bg-gradient-to-r from-gaming-purple via-gaming-cyan to-gaming-pink rounded-full"
-                animate={{ width: `${totalProgress}%` }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
-              {checklistItems.map((item, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition-colors duration-200 ${
-                    item.checked 
-                      ? 'bg-success/5 border-success/20 text-success' 
-                      : 'bg-muted/10 border-border/30 text-muted-foreground'
-                  }`}
-                >
-                  {item.checked ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
-                  )}
-                  <span className="truncate font-medium">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="w-full border-b border-border/50 rounded-none bg-transparent h-12 p-0 gap-6 flex md:inline-flex overflow-x-auto whitespace-nowrap scrollbar-none justify-start">
-          <TabsTrigger value="profile" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><User className="h-4 w-4" />Profile</TabsTrigger>
-          <TabsTrigger value="gaming" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><Gamepad2 className="h-4 w-4" />Gaming</TabsTrigger>
-          <TabsTrigger value="social" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><Sparkles className="h-4 w-4" />Social Links</TabsTrigger>
-          <TabsTrigger value="accounts" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><Shield className="h-4 w-4" />Connected Accounts</TabsTrigger>
-          <TabsTrigger value="notifications" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><Bell className="h-4 w-4" />Notifications</TabsTrigger>
-          <TabsTrigger value="advanced" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><Gauge className="h-4 w-4" />Advanced</TabsTrigger>
-          <TabsTrigger value="legal" className="shrink-0 data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-2 py-3 bg-transparent hover:text-foreground text-sm gap-1.5"><Scale className="h-4 w-4" />License & Legal</TabsTrigger>
+      {/* Modern Tabs */}
+      <Tabs defaultValue="setup" className="space-y-6">
+        <TabsList className="w-full border-b border-border/50 rounded-none bg-transparent h-12 p-0 gap-4 flex md:inline-flex overflow-x-auto whitespace-nowrap scrollbar-none justify-start">
+          <TabsTrigger
+            value="setup"
+            className="shrink-0 data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent rounded-none px-3 py-3 bg-transparent font-bold text-sm gap-2"
+          >
+            <Gamepad2 className="h-4 w-4" /> Game Profile
+          </TabsTrigger>
+          <TabsTrigger
+            value="accounts"
+            className="shrink-0 data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent rounded-none px-3 py-3 bg-transparent font-bold text-sm gap-2"
+          >
+            <Shield className="h-4 w-4" /> Connected Accounts
+          </TabsTrigger>
+          <TabsTrigger
+            value="advanced"
+            className="shrink-0 data-[state=active]:border-primary data-[state=active]:text-primary border-b-2 border-transparent rounded-none px-3 py-3 bg-transparent font-bold text-sm gap-2"
+          >
+            <Bell className="h-4 w-4" /> Account & Preferences
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile">
-          <Card variant="glass">
-            <CardContent className="p-6 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="relative group">
-                  <Avatar className="h-20 w-20 border-2 border-primary/40 shadow-lg">
-                    <AvatarImage src={user?.profile?.avatar || ''} />
-                    <AvatarFallback className="text-2xl bg-gradient-to-br from-gaming-purple to-gaming-pink text-white">{getInitials(user?.profile?.username || 'U')}</AvatarFallback>
-                  </Avatar>
-                  {avatarUploading && (
-                    <div className="absolute inset-0 bg-black/70 rounded-full flex flex-col items-center justify-center text-white backdrop-blur-sm">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary mb-1" />
-                      <span className="text-[10px] font-bold font-mono">{avatarProgress}%</span>
+        {/* TAB 1: STREAMLINED GAME PROFILE SETUP FORM */}
+        <TabsContent value="setup">
+          <Card variant="glass" className="border-primary/20 shadow-xl">
+            <CardContent className="p-6 sm:p-8 space-y-6">
+              <form onSubmit={handleSubmitProfile} className="space-y-6">
+                
+                {/* 1. SELECT GAME */}
+                <div className="space-y-2.5">
+                  <Label className="text-sm font-bold flex items-center gap-2 text-foreground">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    Select Game *
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {gameOptions.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setGame(g)}
+                        className={`h-11 rounded-xl font-bold text-xs border transition-all flex items-center justify-center gap-2 px-3 ${
+                          game === g
+                            ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
+                            : 'bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/60 hover:text-foreground'
+                        }`}
+                      >
+                        <Gamepad2 className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{g}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. GAME UID & DISPLAY ALIAS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="gameUid" className="text-xs font-bold text-foreground">
+                      In-Game UID / ID *
+                    </Label>
+                    <Input
+                      id="gameUid"
+                      type="text"
+                      required
+                      placeholder="Enter your Game UID (e.g. 518492041)"
+                      value={gameUid}
+                      onChange={(e) => setGameUid(e.target.value)}
+                      className="h-11 font-mono rounded-xl bg-background/50 border-border/80 text-foreground"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="displayName" className="text-xs font-bold text-foreground">
+                      Gaming Display Name / Alias
+                    </Label>
+                    <Input
+                      id="displayName"
+                      type="text"
+                      placeholder="e.g. ShadowHunter, LegendGamer"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="h-11 rounded-xl bg-background/50 border-border/80 text-foreground"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. RANK, LEVEL, ROLE & REGION */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-foreground">Rank</Label>
+                    <Select value={rank} onValueChange={setRank}>
+                      <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/80">
+                        <SelectValue placeholder="Select rank" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Grandmaster">Grandmaster 👑</SelectItem>
+                        <SelectItem value="Heroic">Heroic / Master 🔥</SelectItem>
+                        <SelectItem value="Ace">Ace / Radiant ⚡</SelectItem>
+                        <SelectItem value="Diamond">Diamond 💎</SelectItem>
+                        <SelectItem value="Ascendant">Ascendant 🏆</SelectItem>
+                        <SelectItem value="Platinum">Platinum 🛡️</SelectItem>
+                        <SelectItem value="Gold">Gold 🥇</SelectItem>
+                        <SelectItem value="Silver">Silver / Bronze 🥉</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-foreground">Role / Type</Label>
+                    <Select value={role} onValueChange={setRole}>
+                      <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/80">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roleOptions.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-foreground">Region</Label>
+                    <Select value={region} onValueChange={setRegion}>
+                      <SelectTrigger className="h-11 rounded-xl bg-background/50 border-border/80">
+                        <SelectValue placeholder="Select region" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ASIA">Asia / India 🇮🇳</SelectItem>
+                        <SelectItem value="NA-East">NA-East 🇺🇸</SelectItem>
+                        <SelectItem value="NA-West">NA-West 🇺🇸</SelectItem>
+                        <SelectItem value="EU">Europe 🇪🇺</SelectItem>
+                        <SelectItem value="SA">South America 🇧🇷</SelectItem>
+                        <SelectItem value="Global">Global 🌐</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="level" className="text-xs font-bold text-foreground">Level</Label>
+                    <Input
+                      id="level"
+                      type="number"
+                      placeholder="Level (e.g. 65)"
+                      value={level}
+                      onChange={(e) => setLevel(e.target.value)}
+                      className="h-11 font-mono rounded-xl bg-background/50 border-border/80 text-foreground"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. ID SCREENSHOT PROOF UPLOAD */}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-foreground flex items-center justify-between">
+                    <span>ID Screenshot Proof (Option to attach screenshot)</span>
+                    <span className="text-[11px] text-muted-foreground font-normal">Supports JPG, PNG, WEBP (Max 10MB)</span>
+                  </Label>
+                  <div className="border-2 border-dashed border-border/60 hover:border-primary/50 rounded-2xl p-4 bg-muted/20 text-center relative transition-colors">
+                    {screenshotUrl ? (
+                      <div className="relative inline-block group">
+                        <img
+                          src={screenshotUrl}
+                          alt="In-game ID Screenshot Proof"
+                          className="max-h-48 rounded-xl object-contain shadow-lg border border-border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setScreenshotUrl('')}
+                          className="absolute -top-2 -right-2 bg-destructive text-white p-1 rounded-full shadow hover:scale-110 transition-transform"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                        <div className="mt-2 flex items-center justify-center gap-1 text-xs text-emerald-400 font-bold">
+                          <CheckCircle2 className="w-4 h-4" /> Screenshot Attached
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center space-y-2 py-2">
+                        <div className="p-3 rounded-full bg-primary/10 text-primary">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                        <div className="text-xs">
+                          <span className="font-bold text-primary">Click to upload</span> in-game ID screenshot
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Upload profile or stats screenshot for player verification</p>
+                      </div>
+                    )}
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleScreenshotChange}
+                      disabled={uploadingScreenshot}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
+                  {uploadingScreenshot && (
+                    <div className="flex items-center gap-2 text-xs text-primary font-medium mt-1">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading screenshot... {screenshotProgress}%
                     </div>
                   )}
                 </div>
-                <div>
+
+                {/* 5. BIO / GAMER SUMMARY */}
+                <div className="space-y-2">
+                  <Label htmlFor="bio" className="text-xs font-bold text-foreground">Bio / Gamer Summary</Label>
+                  <Textarea
+                    id="bio"
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Introduce yourself to teammates! Share your active hours, playstyle, or favorite weapons."
+                    rows={3}
+                    className="rounded-xl bg-background/50 border-border/80 resize-none text-foreground"
+                  />
+                </div>
+
+                {/* 6. PROFILE VISIBILITY TOGGLE */}
+                <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/20 p-4">
+                  <div>
+                    <p className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                      {isPublic ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-amber-400" />}
+                      Public Profile Visibility
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {isPublic
+                        ? 'Public — Other gamers can find and view your profile card & game stats'
+                        : 'Private — Hidden from player search & matchmaking'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublic(!isPublic)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      isPublic
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                    }`}
+                  >
+                    {isPublic ? 'Public' : 'Private'}
+                  </button>
+                </div>
+
+                {/* 7. AVATAR UPLOAD OPTION */}
+                <div className="flex items-center justify-between border-t border-border/40 pt-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12 border border-primary/40">
+                      <AvatarImage src={user?.profile?.avatar || ''} />
+                      <AvatarFallback className="bg-primary/20 text-primary font-bold">
+                        {getInitials(user?.profile?.username || 'U')}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Profile Avatar</p>
+                      <p className="text-[11px] text-muted-foreground">Change your public avatar picture</p>
+                    </div>
+                  </div>
+
                   <Button variant="outline" size="sm" className="relative h-9 px-4 rounded-xl cursor-pointer" disabled={avatarUploading}>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" 
-                      onChange={handleAvatarChange} 
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      onChange={handleAvatarChange}
                       disabled={avatarUploading}
                     />
                     {avatarUploading ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                        <span>Uploading... {avatarProgress}%</span>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                        <span>{avatarProgress}%</span>
                       </>
                     ) : (
                       <>
-                        <Camera className="h-4 w-4 mr-1.5 text-primary" />
+                        <Camera className="h-3.5 w-3.5 mr-1.5 text-primary" />
                         <span>Change Avatar</span>
                       </>
                     )}
                   </Button>
-                  <p className="text-[11px] text-muted-foreground mt-1">Supports JPG, PNG, WEBP (Max 10MB)</p>
                 </div>
-              </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="displayName" className="text-xs font-semibold">Gaming Username / Display Name *</Label>
-                  <Input 
-                    id="displayName"
-                    value={profile.displayName} 
-                    onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} 
-                    placeholder="Enter your in-game alias"
-                    variant="neon"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="country" className="text-xs font-semibold">Country *</Label>
-                  <Input 
-                    id="country"
-                    value={profile.country} 
-                    onChange={(e) => setProfile({ ...profile, country: e.target.value })} 
-                    placeholder="e.g. United States, India"
-                    variant="neon"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="bio" className="text-xs font-semibold">Bio / Gamer Summary *</Label>
-                <Textarea 
-                  id="bio"
-                  value={profile.bio} 
-                  onChange={(e) => setProfile({ ...profile, bio: e.target.value })} 
-                  placeholder="Introduce yourself! Let players know your schedule, achievements, or favorite genres."
-                  rows={3} 
-                  className="resize-none"
-                />
-              </div>
-
-              <Button 
-                variant="gradient" 
-                onClick={handleSave} 
-                disabled={updateProfile.isPending}
-                className="h-11 px-6 rounded-xl gap-2 font-bold shadow-md shadow-primary/10"
-                animate
-              >
-                {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Save Profile
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="gaming">
-          <Card variant="glass">
-            <CardContent className="p-6 space-y-5">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">Favorite / Connected Games *</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {profile.mainGames.length === 0 ? (
-                    <span className="text-xs text-muted-foreground/60 italic">No games selected. Add at least one game.</span>
+                {/* 8. SAVE PROFILE BUTTON */}
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  variant="gradient"
+                  className="w-full h-12 rounded-xl font-extrabold text-sm gap-2 shadow-lg shadow-primary/10"
+                  animate
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Saving Gamer Profile...
+                    </>
                   ) : (
-                    profile.mainGames.map((g: string, i: number) => (
-                      <Badge key={i} variant="secondary" className="gap-1.5 px-2.5 py-1 text-xs">
-                        {g}
-                        <button 
-                          type="button"
-                          onClick={() => setProfile({ ...profile, mainGames: profile.mainGames.filter((_: string, j: number) => j !== i) })}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </Badge>
-                    ))
+                    'Save Profile & Publish'
                   )}
-                </div>
-                <div className="flex gap-2 max-w-md mt-2">
-                  <Select value={newGame} onValueChange={setNewGame}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Add game" /></SelectTrigger>
-                    <SelectContent>
-                      {GAMES.filter((game: string) => !profile.mainGames.includes(game)).map((game: string) => (
-                        <SelectItem key={game} value={game}>
-                          <span className="flex items-center justify-between w-full gap-2">
-                            <span>{game}</span>
-                            <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Verified Connection ✅</span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="sm" onClick={addGame} className="h-10 px-4 rounded-xl shrink-0">Add</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">Languages</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {profile.languages.map((lang: string, i: number) => (
-                    <Badge key={i} variant="outline" className="gap-1.5 px-2.5 py-1 text-xs">
-                      {lang}
-                      <button 
-                        type="button"
-                        onClick={() => setProfile({ ...profile, languages: profile.languages.filter((_: string, j: number) => j !== i) })}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex gap-2 max-w-md mt-2">
-                  <Select value={newLang} onValueChange={setNewLang}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Add language" /></SelectTrigger>
-                    <SelectContent>
-                      {LANGUAGES.filter((lang: string) => !profile.languages.includes(lang)).map((lang: string) => (
-                        <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="sm" onClick={addLang} className="h-10 px-4 rounded-xl shrink-0">Add</Button>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Role / Position</Label>
-                  <Select value={profile.role} onValueChange={(v) => setProfile({ ...profile, role: v })}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Select role" /></SelectTrigger>
-                    <SelectContent>
-                      {ROLES.map((r) => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Play Style</Label>
-                  <Select value={profile.playStyle} onValueChange={(v) => setProfile({ ...profile, playStyle: v })}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Select style" /></SelectTrigger>
-                    <SelectContent>
-                      {PLAY_STYLES.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Communication Style</Label>
-                  <Select value={profile.communicationStyle} onValueChange={(v) => setProfile({ ...profile, communicationStyle: v })}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Select style" /></SelectTrigger>
-                    <SelectContent>
-                      {COMMUNICATION_STYLES.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="rank" className="text-xs font-semibold">Rank (Overall / Main Game)</Label>
-                  <Input 
-                    id="rank"
-                    value={profile.rank} 
-                    onChange={(e) => setProfile({ ...profile, rank: e.target.value })} 
-                    placeholder="e.g. Gold, Platinum, Diamond"
-                    variant="neon"
-                  />
-                </div>
-              </div>
-
-              <Button 
-                variant="gradient" 
-                onClick={handleSave} 
-                disabled={updateProfile.isPending}
-                className="h-11 px-6 rounded-xl gap-2 font-bold shadow-md shadow-primary/10"
-                animate
-              >
-                {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Save Gaming Details
-              </Button>
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="social">
-          <Card variant="glass">
-            <CardContent className="p-6 space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="twitch" className="text-xs font-semibold">Twitch Channel</Label>
-                  <Input 
-                    id="twitch"
-                    value={profile.twitch} 
-                    onChange={(e) => setProfile({ ...profile, twitch: e.target.value })} 
-                    placeholder="twitch.tv/yourname" 
-                    variant="neon"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="youtube" className="text-xs font-semibold">YouTube Channel</Label>
-                  <Input 
-                    id="youtube"
-                    value={profile.youtube} 
-                    onChange={(e) => setProfile({ ...profile, youtube: e.target.value })} 
-                    placeholder="youtube.com/@yourname" 
-                    variant="neon"
-                  />
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="discord" className="text-xs font-semibold">Discord Username</Label>
-                  <Input 
-                    id="discord"
-                    value={profile.discord} 
-                    onChange={(e) => setProfile({ ...profile, discord: e.target.value })} 
-                    placeholder="username#0000" 
-                    variant="neon"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="twitter" className="text-xs font-semibold">Twitter / X handle</Label>
-                  <Input 
-                    id="twitter"
-                    value={profile.twitter} 
-                    onChange={(e) => setProfile({ ...profile, twitter: e.target.value })} 
-                    placeholder="@yourname" 
-                    variant="neon"
-                  />
-                </div>
-              </div>
-
-              <Button 
-                variant="gradient" 
-                onClick={handleSave} 
-                disabled={updateProfile.isPending}
-                className="h-11 px-6 rounded-xl gap-2 font-bold shadow-md shadow-primary/10"
-                animate
-              >
-                {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Save Socials
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
+        {/* TAB 2: CONNECTED ACCOUNTS */}
         <TabsContent value="accounts">
           <Card variant="glass">
             <CardHeader>
@@ -617,7 +595,7 @@ export default function SettingsPage() {
                 <Shield className="h-5 w-5 text-primary" /> Connected Social & Gaming Accounts
               </CardTitle>
               <CardDescription>
-                Link your Google, Discord, and Steam accounts for single click sign-in and cross-platform gaming identity.
+                Link your Google, Discord, and Steam accounts for quick login and gaming identity.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -684,31 +662,10 @@ export default function SettingsPage() {
                               🟢 Connected
                             </Badge>
                           )}
-                          {isSteamConnected && steamData?.level && (
-                            <Badge variant="secondary" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/20">
-                              Level {steamData.level} 🎮
-                            </Badge>
-                          )}
                         </div>
-                        {isDiscordConnected ? (
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            <p className="font-medium text-foreground">Username: @{discordData.username}</p>
-                            {discordData.connectedAt && (
-                              <p className="text-[10px] text-muted-foreground/70">Connected on {new Date(discordData.connectedAt).toLocaleDateString()}</p>
-                            )}
-                          </div>
-                        ) : isSteamConnected ? (
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            <p className="font-medium text-foreground">Persona: {steamData.username}</p>
-                            {steamData.connectedAt && (
-                              <p className="text-[10px] text-muted-foreground/70">Connected on {new Date(steamData.connectedAt).toLocaleDateString()}</p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            {linkedAcc ? `Connected as ${linkedAcc.providerUsername || linkedAcc.providerId}` : 'Not connected'}
-                          </p>
-                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {isDiscordConnected ? `@${discordData.username}` : isSteamConnected ? steamData.username : linkedAcc ? `Connected` : 'Not connected'}
+                        </p>
                       </div>
                     </div>
                     {isDiscordConnected ? (
@@ -719,7 +676,6 @@ export default function SettingsPage() {
                         onClick={() => disconnectDiscord.mutate()}
                         disabled={disconnectDiscord.isPending}
                       >
-                        {disconnectDiscord.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                         Disconnect
                       </Button>
                     ) : isSteamConnected ? (
@@ -730,26 +686,13 @@ export default function SettingsPage() {
                         onClick={() => disconnectSteam.mutate()}
                         disabled={disconnectSteam.isPending}
                       >
-                        {disconnectSteam.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                         Disconnect
                       </Button>
-                    ) : linkedAcc ? (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs text-destructive hover:bg-destructive/10 rounded-xl"
-                          onClick={() => unlinkAccount.mutate(item.provider)}
-                          disabled={unlinkAccount.isPending}
-                        >
-                          Unlink
-                        </Button>
-                      </div>
                     ) : (
                       <Button
                         variant="outline"
                         size="sm"
-                        className={`text-xs gap-1.5 rounded-xl ${isDiscord ? 'border-[#5865F2]/40 text-[#5865F2] hover:bg-[#5865F2]/10' : ''}`}
+                        className="text-xs rounded-xl"
                         onClick={() => handleLinkSocial(item.provider.toLowerCase())}
                       >
                         Connect {item.name}
@@ -762,35 +705,9 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="notifications">
-          <Card variant="glass">
-            <CardContent className="p-6 space-y-4">
-              {[
-                { label: 'Push Notifications', desc: 'Receive push notifications' },
-                { label: 'Email Notifications', desc: 'Receive email notifications' },
-                { label: 'Messages', desc: 'New message alerts' },
-                { label: 'Team Invites', desc: 'Team invitation alerts' },
-                { label: 'Tournament Updates', desc: 'Tournament status changes' },
-                { label: 'Job Alerts', desc: 'New job postings' }
-              ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/20 transition-colors">
-                  <div>
-                    <p className="text-sm font-semibold">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
-                  </div>
-                  <Switch />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
+        {/* TAB 3: ADVANCED PREFERENCES */}
         <TabsContent value="advanced">
           <AdvancedSettingsTab />
-        </TabsContent>
-
-        <TabsContent value="legal">
-          <LegalSettingsTab />
         </TabsContent>
       </Tabs>
     </div>
