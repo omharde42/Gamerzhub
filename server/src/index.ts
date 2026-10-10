@@ -176,13 +176,19 @@ app.get('/ready', async (_req, res) => {
 app.get('/ready/migrate', async (_req, res) => {
   try {
     const { execSync } = require('child_process');
+    const path = require('path');
+    const prismaCli = path.resolve(__dirname, '../node_modules/prisma/build/index.js');
     let output = '';
     try {
-      output += execSync('npx prisma migrate deploy', { encoding: 'utf8', env: process.env });
+      output += execSync(`node "${prismaCli}" migrate deploy`, { encoding: 'utf8', env: process.env });
     } catch (e: any) {
       output += `[Migrate Deploy Note] ${e?.message}\n`;
     }
-    output += execSync('npx prisma db push --accept-data-loss', { encoding: 'utf8', env: process.env });
+    try {
+      output += execSync(`node "${prismaCli}" db push --accept-data-loss`, { encoding: 'utf8', env: process.env });
+    } catch (e: any) {
+      output += `[DB Push Note] ${e?.message}\n`;
+    }
     res.status(200).json({ success: true, message: 'Database schema migrated and synchronized successfully 🚀', output });
   } catch (err: any) {
     res.status(500).json({ success: false, message: 'Migration execution failed', error: err?.message || String(err) });

@@ -1,15 +1,18 @@
 const { execSync } = require('child_process');
 const dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || process.env.SUPABASE_DB_URL;
 
+const path = require('path');
+const prismaCli = path.resolve(__dirname, '../node_modules/prisma/build/index.js');
+
 if (dbUrl && !dbUrl.includes('localhost') && !dbUrl.includes('127.0.0.1')) {
   console.log('[Build] Remote DATABASE_URL detected. Running production database migrations...');
   try {
-    execSync('npx prisma migrate deploy', { stdio: 'inherit' });
+    execSync(`node "${prismaCli}" migrate deploy`, { stdio: 'inherit' });
     console.log('[Build] Database migrations applied successfully 🚀');
   } catch (err) {
     console.warn('[Build] Migrate deploy notice:', err?.message || String(err));
     try {
-      execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+      execSync(`node "${prismaCli}" db push --accept-data-loss`, { stdio: 'inherit' });
       console.log('[Build] Database schema pushed successfully 🚀');
     } catch (pushErr) {
       console.warn('[Build] DB push warning:', pushErr?.message || String(pushErr));
