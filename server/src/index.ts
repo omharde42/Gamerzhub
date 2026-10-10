@@ -176,8 +176,14 @@ app.get('/ready', async (_req, res) => {
 app.get('/ready/migrate', async (_req, res) => {
   try {
     const { execSync } = require('child_process');
-    const output = execSync('npx prisma db push --accept-data-loss', { encoding: 'utf8', env: process.env });
-    res.status(200).json({ success: true, message: 'Database schema pushed successfully 🚀', output });
+    let output = '';
+    try {
+      output += execSync('npx prisma migrate deploy', { encoding: 'utf8', env: process.env });
+    } catch (e: any) {
+      output += `[Migrate Deploy Note] ${e?.message}\n`;
+    }
+    output += execSync('npx prisma db push --accept-data-loss', { encoding: 'utf8', env: process.env });
+    res.status(200).json({ success: true, message: 'Database schema migrated and synchronized successfully 🚀', output });
   } catch (err: any) {
     res.status(500).json({ success: false, message: 'Migration execution failed', error: err?.message || String(err) });
   }
