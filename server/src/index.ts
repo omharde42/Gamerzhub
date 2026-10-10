@@ -238,12 +238,25 @@ httpServer.listen(config.port, () => {
   console.log(`GamerHub API running on port ${config.port}`);
   console.log(`Environment: ${config.nodeEnv}`);
 
-  // Automatically backfill any missing GamerZ IDs for existing users
+  // Automatically synchronize database schema on production boot to ensure all columns exist
   try {
-    const { backfillGamerZIds } = require('./scripts/backfillGamerZId');
-    backfillGamerZIds().catch((err: any) => console.error('[backfillGamerZIds]', err?.message));
+    const { exec } = require('child_process');
+    exec('npx prisma db push --accept-data-loss', (err: any, stdout: any, stderr: any) => {
+      if (err) {
+        console.warn('[AutoSchemaSync] Schema push warning:', err?.message || stderr);
+      } else {
+        console.log('[AutoSchemaSync] Production database schema synchronized successfully 🚀');
+        // Backfill GamerZ IDs after schema push succeeds
+        try {
+          const { backfillGamerZIds } = require('./scripts/backfillGamerZId');
+          backfillGamerZIds().catch((err: any) => console.error('[backfillGamerZIds]', err?.message));
+        } catch (e: any) {
+          console.warn('[backfillGamerZIds] Skipped backfill:', e?.message);
+        }
+      }
+    });
   } catch (e: any) {
-    console.warn('[backfillGamerZIds] Skipped backfill:', e?.message);
+    console.warn('[AutoSchemaSync] Skipped auto schema sync:', e?.message);
   }
 
   // Automatically clean synthetic seeded users on startup (preserving genuine real users)

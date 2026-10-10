@@ -21,8 +21,16 @@ export async function generateUniqueGamerZId(): Promise<string> {
   let gamerzId = generateRandomGamerZId();
   let attempts = 0;
   while (attempts < 20) {
-    const existing = await prisma.user.findUnique({ where: { gamerzId } });
-    if (!existing) return gamerzId;
+    try {
+      const existing = await prisma.user.findUnique({ where: { gamerzId } });
+      if (!existing) return gamerzId;
+    } catch (err: any) {
+      if (err?.code === 'P2022' || err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+        console.warn('[generateUniqueGamerZId] Database column missing, returning generated ID');
+        return gamerzId;
+      }
+      throw err;
+    }
     gamerzId = generateRandomGamerZId();
     attempts++;
   }
@@ -39,9 +47,17 @@ export async function ensureUserGamerZId(user: { id: string; gamerzId?: string |
     return user.gamerzId;
   }
   const newGamerZId = await generateUniqueGamerZId();
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { gamerzId: newGamerZId },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { gamerzId: newGamerZId },
+    });
+  } catch (err: any) {
+    if (err?.code === 'P2022' || err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+      console.warn('[ensureUserGamerZId] Column gamerzId missing in DB schema, returning generated ID in-memory');
+    } else {
+      throw err;
+    }
+  }
   return newGamerZId;
 }

@@ -25,17 +25,35 @@ export class AuthService {
 
     const gamerzId = await generateUniqueGamerZId();
     const hashedPassword = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: {
-        email,
-        gamerzId,
-        password: hashedPassword,
-        emailVerified: new Date(),
-        profile: { create: { username: finalUsername } },
-        notificationSettings: { create: {} },
-      },
-      include: { profile: true },
-    });
+    let user: any;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email,
+          gamerzId,
+          password: hashedPassword,
+          emailVerified: new Date(),
+          profile: { create: { username: finalUsername } },
+          notificationSettings: { create: {} },
+        },
+        include: { profile: true },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2022' || err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+        user = await prisma.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            emailVerified: new Date(),
+            profile: { create: { username: finalUsername } },
+            notificationSettings: { create: {} },
+          },
+          include: { profile: true },
+        });
+      } else {
+        throw err;
+      }
+    }
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
     const refreshToken = generateRefreshToken(payload);
@@ -231,34 +249,69 @@ export class AuthService {
           existingUser = await prisma.profile.findUnique({ where: { username } });
         }
 
-        user = await prisma.user.create({
-          data: {
-            email,
-            gamerzId: await generateUniqueGamerZId(),
-            emailVerified: new Date(),
-            profile: {
-              create: {
-                username,
-                displayName: metaName || username,
-                avatar: avatarUrl,
+        const socialGamerZId = await generateUniqueGamerZId();
+        try {
+          user = await prisma.user.create({
+            data: {
+              email,
+              gamerzId: socialGamerZId,
+              emailVerified: new Date(),
+              profile: {
+                create: {
+                  username,
+                  displayName: metaName || username,
+                  avatar: avatarUrl,
+                },
+              },
+              notificationSettings: {
+                create: {},
+              },
+              accounts: {
+                create: {
+                  provider,
+                  providerId,
+                  providerUsername: metaName,
+                },
               },
             },
-            notificationSettings: {
-              create: {},
+            include: {
+              profile: true,
+              subscription: true,
             },
-            accounts: {
-              create: {
-                provider,
-                providerId,
-                providerUsername: metaName,
+          });
+        } catch (err: any) {
+          if (err?.code === 'P2022' || err?.code === 'P2021' || err?.message?.includes('does not exist')) {
+            user = await prisma.user.create({
+              data: {
+                email,
+                emailVerified: new Date(),
+                profile: {
+                  create: {
+                    username,
+                    displayName: metaName || username,
+                    avatar: avatarUrl,
+                  },
+                },
+                notificationSettings: {
+                  create: {},
+                },
+                accounts: {
+                  create: {
+                    provider,
+                    providerId,
+                    providerUsername: metaName,
+                  },
+                },
               },
-            },
-          },
-          include: {
-            profile: true,
-            subscription: true,
-          },
-        });
+              include: {
+                profile: true,
+                subscription: true,
+              },
+            });
+          } else {
+            throw err;
+          }
+        }
       }
     }
 
