@@ -173,6 +173,15 @@ app.get('/ready', async (_req, res) => {
     res.status(503).json({ status: 'unready', database: 'disconnected', error: err?.message || 'Database error' });
   }
 });
+app.get('/ready/migrate', async (_req, res) => {
+  try {
+    const { execSync } = require('child_process');
+    const output = execSync('npx prisma db push --accept-data-loss', { encoding: 'utf8', env: process.env });
+    res.status(200).json({ success: true, message: 'Database schema pushed successfully 🚀', output });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: 'Migration execution failed', error: err?.message || String(err) });
+  }
+});
 
 // Routes
 app.use('/api/app', appRoutes);
