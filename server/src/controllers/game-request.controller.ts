@@ -56,19 +56,67 @@ export class GameRequestController {
     sendSuccess(res, requests);
   });
 
-  // Public: list all approved games
+  // Public: list all approved and enabled games
   listApproved = asyncHandler(async (_req: AuthRequest, res: Response) => {
-    const approved = await prisma.gameRequest.findMany({
-      where: { status: 'APPROVED' },
-      orderBy: { gameName: 'asc' },
-      select: {
-        id: true,
-        gameName: true,
-        genre: true,
-        logo: true,
-      },
-    });
-    sendSuccess(res, approved);
+    try {
+      const [platformGames, approvedRequests] = await Promise.all([
+        prisma.platformGame.findMany({
+          where: { isEnabled: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+          select: {
+            id: true,
+            name: true,
+            genre: true,
+            category: true,
+            logo: true,
+            bannerUrl: true,
+            platforms: true,
+            modes: true,
+            isFeatured: true,
+          },
+        }),
+        prisma.gameRequest.findMany({
+          where: { status: 'APPROVED' },
+          orderBy: { gameName: 'asc' },
+          select: {
+            id: true,
+            gameName: true,
+            genre: true,
+            logo: true,
+          },
+        }),
+      ]);
+
+      const formattedPlatformGames = platformGames.map((g) => ({
+        id: g.id,
+        gameName: g.name,
+        genre: g.genre || g.category || 'Popular',
+        logo: g.logo,
+        bannerUrl: g.bannerUrl,
+        platforms: g.platforms,
+        modes: g.modes,
+        isFeatured: g.isFeatured,
+        isPlatformGame: true,
+      }));
+
+      const existingNames = new Set(formattedPlatformGames.map((g) => g.gameName.toLowerCase()));
+      const filteredRequests = approvedRequests
+        .filter((r) => !existingNames.has(r.gameName.toLowerCase()))
+        .map((r) => ({
+          ...r,
+          isPlatformGame: false,
+        }));
+
+      sendSuccess(res, [...formattedPlatformGames, ...filteredRequests]);
+    } catch {
+      // Graceful fallback to approved game requests if PlatformGame query fails
+      const fallback = await prisma.gameRequest.findMany({
+        where: { status: 'APPROVED' },
+        orderBy: { gameName: 'asc' },
+        select: { id: true, gameName: true, genre: true, logo: true },
+      });
+      sendSuccess(res, fallback);
+    }
   });
 
   // Admin: list all pending requests

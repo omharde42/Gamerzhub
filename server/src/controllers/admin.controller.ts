@@ -2070,6 +2070,427 @@ export class AdminController {
 
     sendSuccess(res, { id }, 'Tournament deleted successfully');
   });
+
+  // ─── Platform Games Catalog CMS ───────────────────────────────────────────
+  getGamesCatalog = asyncHandler(async (req: AuthRequest, res: Response) => {
+    let games = await prisma.platformGame.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+
+    if (games.length === 0) {
+      const initial = [
+        { name: 'Valorant', slug: 'valorant', genre: 'FPS', category: 'Tactical Shooter', platforms: ['PC'], isEnabled: true, isFeatured: true, sortOrder: 1 },
+        { name: 'BGMI / PUBG', slug: 'bgmi', genre: 'Battle Royale', category: 'Mobile', platforms: ['Mobile', 'Android', 'iOS'], isEnabled: true, isFeatured: true, sortOrder: 2 },
+        { name: 'Free Fire', slug: 'free-fire', genre: 'Battle Royale', category: 'Mobile', platforms: ['Mobile', 'Android', 'iOS'], isEnabled: true, isFeatured: true, sortOrder: 3 },
+        { name: 'Counter-Strike 2', slug: 'cs2', genre: 'FPS', category: 'Tactical Shooter', platforms: ['PC'], isEnabled: true, isFeatured: true, sortOrder: 4 },
+        { name: 'League of Legends', slug: 'league-of-legends', genre: 'MOBA', category: 'Strategy', platforms: ['PC'], isEnabled: true, isFeatured: false, sortOrder: 5 },
+        { name: 'Dota 2', slug: 'dota-2', genre: 'MOBA', category: 'Strategy', platforms: ['PC'], isEnabled: true, isFeatured: false, sortOrder: 6 },
+        { name: 'Apex Legends', slug: 'apex-legends', genre: 'Battle Royale', category: 'Hero Shooter', platforms: ['PC', 'PlayStation', 'Xbox'], isEnabled: true, isFeatured: true, sortOrder: 7 },
+        { name: 'Fortnite', slug: 'fortnite', genre: 'Battle Royale', category: 'Sandbox', platforms: ['PC', 'PlayStation', 'Xbox', 'Mobile'], isEnabled: true, isFeatured: true, sortOrder: 8 },
+        { name: 'Overwatch 2', slug: 'overwatch-2', genre: 'FPS', category: 'Hero Shooter', platforms: ['PC', 'PlayStation', 'Xbox'], isEnabled: true, isFeatured: false, sortOrder: 9 },
+        { name: 'Rocket League', slug: 'rocket-league', genre: 'Sports', category: 'Vehicular Soccer', platforms: ['PC', 'PlayStation', 'Xbox'], isEnabled: true, isFeatured: false, sortOrder: 10 },
+        { name: 'Rainbow Six Siege', slug: 'rainbow-six-siege', genre: 'FPS', category: 'Tactical', platforms: ['PC', 'PlayStation', 'Xbox'], isEnabled: true, isFeatured: false, sortOrder: 11 },
+        { name: 'Call of Duty: Warzone', slug: 'cod-warzone', genre: 'Battle Royale', category: 'Military', platforms: ['PC', 'PlayStation', 'Xbox'], isEnabled: true, isFeatured: true, sortOrder: 12 },
+        { name: 'Call of Duty Mobile', slug: 'cod-mobile', genre: 'FPS', category: 'Mobile', platforms: ['Mobile'], isEnabled: true, isFeatured: false, sortOrder: 13 },
+        { name: 'Clash of Clans', slug: 'clash-of-clans', genre: 'Strategy', category: 'Mobile', platforms: ['Mobile'], isEnabled: true, isFeatured: false, sortOrder: 14 },
+        { name: 'Clash Royale', slug: 'clash-royale', genre: 'Strategy', category: 'Card Battler', platforms: ['Mobile'], isEnabled: true, isFeatured: false, sortOrder: 15 },
+        { name: 'Brawl Stars', slug: 'brawl-stars', genre: 'Action', category: 'Mobile', platforms: ['Mobile'], isEnabled: true, isFeatured: false, sortOrder: 16 }
+      ];
+      for (const g of initial) {
+        try {
+          await prisma.platformGame.upsert({
+            where: { name: g.name },
+            create: g,
+            update: {},
+          });
+        } catch {}
+      }
+      games = await prisma.platformGame.findMany({
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+    }
+
+    const profileCounts = await prisma.gameProfile.groupBy({
+      by: ['game'],
+      _count: { id: true },
+    });
+    const countsMap = profileCounts.reduce(
+      (acc, c) => ({ ...acc, [c.game.toLowerCase()]: c._count.id }),
+      {} as Record<string, number>
+    );
+
+    const enriched = games.map((g) => ({
+      ...g,
+      totalPlayers: countsMap[g.name.toLowerCase()] || countsMap[g.slug.toLowerCase()] || 0,
+    }));
+
+    sendSuccess(res, enriched);
+  });
+
+  createGame = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { name, genre, category, description, logo, bannerUrl, platforms, modes, isEnabled = true, isFeatured = false } = req.body;
+    if (!name || !genre) {
+      return sendError(res, 400, 'Game name and genre are required');
+    }
+
+    const slug = (req.body.slug || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+
+    const existing = await prisma.platformGame.findFirst({
+      where: { OR: [{ name }, { slug }] },
+    });
+    if (existing) {
+      return sendError(res, 400, 'A game with this name or slug already exists');
+    }
+
+    const game = await prisma.platformGame.create({
+      data: {
+        name,
+        slug,
+        genre,
+        category: category || 'Popular',
+        description: description || null,
+        logo: logo || null,
+        bannerUrl: bannerUrl || null,
+        platforms: Array.isArray(platforms) ? platforms : ['PC'],
+        modes: Array.isArray(modes) ? modes : ['Solo', 'Squad'],
+        isEnabled: Boolean(isEnabled),
+        isFeatured: Boolean(isFeatured),
+      },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'GAME_CREATED',
+      'PlatformGame',
+      game.id,
+      { name: game.name, slug: game.slug, isEnabled: game.isEnabled },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, game, 'Game added to catalog successfully', 201);
+  });
+
+  updateGame = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { name, genre, category, description, logo, bannerUrl, platforms, modes, isEnabled, isFeatured } = req.body;
+
+    const game = await prisma.platformGame.findUnique({ where: { id } });
+    if (!game) {
+      return sendError(res, 404, 'Game not found');
+    }
+
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (genre !== undefined) updateData.genre = genre;
+    if (category !== undefined) updateData.category = category;
+    if (description !== undefined) updateData.description = description;
+    if (logo !== undefined) updateData.logo = logo;
+    if (bannerUrl !== undefined) updateData.bannerUrl = bannerUrl;
+    if (platforms !== undefined) updateData.platforms = Array.isArray(platforms) ? platforms : [platforms];
+    if (modes !== undefined) updateData.modes = Array.isArray(modes) ? modes : [modes];
+    if (isEnabled !== undefined) updateData.isEnabled = Boolean(isEnabled);
+    if (isFeatured !== undefined) updateData.isFeatured = Boolean(isFeatured);
+
+    const updated = await prisma.platformGame.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'GAME_UPDATED',
+      'PlatformGame',
+      id,
+      { changes: updateData },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, updated, 'Game updated successfully');
+  });
+
+  toggleGameStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const game = await prisma.platformGame.findUnique({ where: { id } });
+    if (!game) {
+      return sendError(res, 404, 'Game not found');
+    }
+
+    const updated = await prisma.platformGame.update({
+      where: { id },
+      data: { isEnabled: !game.isEnabled },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'GAME_STATUS_TOGGLED',
+      'PlatformGame',
+      id,
+      { name: game.name, isEnabled: updated.isEnabled },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(
+      res,
+      updated,
+      updated.isEnabled ? 'Game enabled on public website' : 'Game hidden from public website'
+    );
+  });
+
+  deleteGame = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const game = await prisma.platformGame.findUnique({ where: { id } });
+    if (!game) {
+      return sendError(res, 404, 'Game not found');
+    }
+
+    await prisma.platformGame.delete({ where: { id } });
+
+    await logAdminAction(
+      req.user!.userId,
+      'GAME_DELETED',
+      'PlatformGame',
+      id,
+      { name: game.name },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { id }, 'Game removed from catalog');
+  });
+
+  // ─── User Logins & Live Sessions Tracking ──────────────────────────────────
+  getLoginStats = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [totalLoginEvents, activeSessions, recentLogins, totalUsers, providerGroups] = await Promise.all([
+      prisma.userLoginEvent.count(),
+      prisma.session.count({ where: { expiresAt: { gt: now } } }),
+      prisma.userLoginEvent.count({ where: { createdAt: { gte: twentyFourHoursAgo } } }),
+      prisma.user.count(),
+      prisma.userLoginEvent.groupBy({
+        by: ['provider'],
+        _count: { id: true },
+      }),
+    ]);
+
+    const providerCounts = providerGroups.reduce(
+      (acc, curr) => ({ ...acc, [curr.provider]: curr._count.id }),
+      {} as Record<string, number>
+    );
+
+    sendSuccess(res, {
+      totalLogins: totalLoginEvents > 0 ? totalLoginEvents : activeSessions,
+      activeSessions,
+      todayLogins: recentLogins,
+      totalRegisteredUsers: totalUsers,
+      byProvider: providerCounts,
+    });
+  });
+
+  getLoginHistory = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page = '1', limit = '20', search = '', provider, type = 'sessions' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    if (type === 'events') {
+      const where: any = {};
+      if (provider && provider !== 'ALL') {
+        where.provider = { equals: provider as string, mode: 'insensitive' };
+      }
+      if (search && typeof search === 'string') {
+        const q = search.trim();
+        where.OR = [
+          { email: { contains: q, mode: 'insensitive' } },
+          { username: { contains: q, mode: 'insensitive' } },
+          { ipAddress: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+
+      const [items, total] = await Promise.all([
+        prisma.userLoginEvent.findMany({
+          where,
+          skip,
+          take: limitNum,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                gamerzId: true,
+                profile: { select: { username: true, displayName: true, avatar: true } },
+              },
+            },
+          },
+        }),
+        prisma.userLoginEvent.count({ where }),
+      ]);
+
+      return sendSuccess(res, {
+        items,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+        },
+      });
+    }
+
+    const now = new Date();
+    const sessionWhere: any = {};
+    if (search && typeof search === 'string') {
+      const q = search.trim();
+      sessionWhere.OR = [
+        { ip: { contains: q, mode: 'insensitive' } },
+        { user: { email: { contains: q, mode: 'insensitive' } } },
+        { user: { profile: { username: { contains: q, mode: 'insensitive' } } } },
+      ];
+    }
+
+    const [sessions, total] = await Promise.all([
+      prisma.session.findMany({
+        where: sessionWhere,
+        skip,
+        take: limitNum,
+        orderBy: { expiresAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              banned: true,
+              gamerzId: true,
+              profile: { select: { username: true, displayName: true, avatar: true } },
+              accounts: { select: { provider: true } },
+            },
+          },
+        },
+      }),
+      prisma.session.count({ where: sessionWhere }),
+    ]);
+
+    const formatted = sessions.map((s) => ({
+      id: s.id,
+      userId: s.userId,
+      ip: s.ip || 'Unknown',
+      userAgent: s.userAgent || 'Unknown',
+      expiresAt: s.expiresAt,
+      isActive: s.expiresAt > now,
+      user: s.user,
+      provider: s.user?.accounts?.[0]?.provider?.toLowerCase() || 'credentials',
+    }));
+
+    sendSuccess(res, {
+      items: formatted,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  });
+
+  revokeSession = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: { user: { select: { email: true } } },
+    });
+
+    if (!session) {
+      return sendError(res, 404, 'Session not found or already terminated');
+    }
+
+    await prisma.session.delete({ where: { id } });
+
+    await logAdminAction(
+      req.user!.userId,
+      'USER_SESSION_REVOKED',
+      'Session',
+      id,
+      { targetUserId: session.userId, userEmail: session.user?.email },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { id }, 'User session terminated successfully');
+  });
+
+  // ─── Site & Platform Configuration ─────────────────────────────────────────
+  getSiteSettings = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const settings = await prisma.siteSetting.findMany({
+      orderBy: { key: 'asc' },
+    });
+
+    const map = settings.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>);
+
+    sendSuccess(res, {
+      list: settings,
+      settings: map,
+    });
+  });
+
+  updateSiteSettings = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { settings } = req.body;
+    if (!settings || typeof settings !== 'object') {
+      return sendError(res, 400, 'Invalid settings payload');
+    }
+
+    const updatedKeys: string[] = [];
+
+    for (const [key, value] of Object.entries(settings)) {
+      if (typeof key === 'string' && value !== undefined) {
+        await prisma.siteSetting.upsert({
+          where: { key },
+          create: {
+            key,
+            value: String(value),
+            category: key.startsWith('banner_') ? 'announcement' : 'access',
+          },
+          update: {
+            value: String(value),
+          },
+        });
+        updatedKeys.push(key);
+      }
+    }
+
+    await logAdminAction(
+      req.user!.userId,
+      'SITE_SETTINGS_UPDATED',
+      'SiteSetting',
+      undefined,
+      { updatedKeys },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { updatedKeys }, 'Platform settings saved successfully');
+  });
+
+  // ─── Public Site Settings & Games Helpers ──────────────────────────────────
+  getPublicSettings = asyncHandler(async (_req: any, res: Response) => {
+    const settings = await prisma.siteSetting.findMany({
+      where: {
+        key: {
+          in: ['banner_enabled', 'banner_text', 'banner_type', 'banner_link', 'maintenance_mode', 'registrations_open'],
+        },
+      },
+    });
+
+    const map = settings.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>);
+
+    sendSuccess(res, map);
+  });
 }
 
 export const adminController = new AdminController();

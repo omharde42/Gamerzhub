@@ -236,7 +236,100 @@ export async function applyRawMigrations(): Promise<{ success: boolean; executed
     `CREATE INDEX IF NOT EXISTS "NewsArticle_isPublished_idx" ON "NewsArticle"("isPublished");`,
     `CREATE INDEX IF NOT EXISTS "NewsArticle_isFeatured_idx" ON "NewsArticle"("isFeatured");`,
     `CREATE INDEX IF NOT EXISTS "NewsArticle_category_idx" ON "NewsArticle"("category");`,
-    `CREATE INDEX IF NOT EXISTS "NewsArticle_publishedAt_idx" ON "NewsArticle"("publishedAt");`
+    `CREATE INDEX IF NOT EXISTS "NewsArticle_publishedAt_idx" ON "NewsArticle"("publishedAt");`,
+
+    // Session createdAt
+    `ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;`,
+    `CREATE INDEX IF NOT EXISTS "Session_createdAt_idx" ON "Session"("createdAt");`,
+
+    // Platform Games Catalog
+    `CREATE TABLE IF NOT EXISTS "PlatformGame" (
+      "id" TEXT NOT NULL,
+      "name" TEXT NOT NULL,
+      "slug" TEXT NOT NULL,
+      "genre" TEXT NOT NULL DEFAULT 'Battle Royale',
+      "category" TEXT NOT NULL DEFAULT 'Popular',
+      "description" TEXT,
+      "logo" TEXT,
+      "bannerUrl" TEXT,
+      "platforms" TEXT[] DEFAULT ARRAY['PC', 'Mobile']::TEXT[],
+      "modes" TEXT[] DEFAULT ARRAY['Solo', 'Squad']::TEXT[],
+      "isEnabled" BOOLEAN NOT NULL DEFAULT true,
+      "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+      "sortOrder" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "PlatformGame_pkey" PRIMARY KEY ("id")
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "PlatformGame_name_key" ON "PlatformGame"("name");`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "PlatformGame_slug_key" ON "PlatformGame"("slug");`,
+    `CREATE INDEX IF NOT EXISTS "PlatformGame_isEnabled_idx" ON "PlatformGame"("isEnabled");`,
+    `CREATE INDEX IF NOT EXISTS "PlatformGame_isFeatured_idx" ON "PlatformGame"("isFeatured");`,
+    `CREATE INDEX IF NOT EXISTS "PlatformGame_genre_idx" ON "PlatformGame"("genre");`,
+
+    // User Login Tracking & Historical Sessions
+    `CREATE TABLE IF NOT EXISTS "UserLoginEvent" (
+      "id" TEXT NOT NULL,
+      "userId" TEXT NOT NULL,
+      "email" TEXT NOT NULL,
+      "username" TEXT,
+      "ipAddress" TEXT,
+      "userAgent" TEXT,
+      "device" TEXT,
+      "provider" TEXT NOT NULL DEFAULT 'credentials',
+      "success" BOOLEAN NOT NULL DEFAULT true,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "UserLoginEvent_pkey" PRIMARY KEY ("id")
+    );`,
+    `CREATE INDEX IF NOT EXISTS "UserLoginEvent_userId_idx" ON "UserLoginEvent"("userId");`,
+    `CREATE INDEX IF NOT EXISTS "UserLoginEvent_createdAt_idx" ON "UserLoginEvent"("createdAt");`,
+    `CREATE INDEX IF NOT EXISTS "UserLoginEvent_provider_idx" ON "UserLoginEvent"("provider");`,
+
+    // Global Site & Platform Configuration
+    `CREATE TABLE IF NOT EXISTS "SiteSetting" (
+      "id" TEXT NOT NULL,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      "description" TEXT,
+      "category" TEXT NOT NULL DEFAULT 'general',
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "SiteSetting_pkey" PRIMARY KEY ("id")
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "SiteSetting_key_key" ON "SiteSetting"("key");`,
+    `CREATE INDEX IF NOT EXISTS "SiteSetting_category_idx" ON "SiteSetting"("category");`,
+
+    // Seed default platform games
+    `INSERT INTO "PlatformGame" ("id", "name", "slug", "genre", "category", "platforms", "isEnabled", "isFeatured", "sortOrder")
+     VALUES 
+      ('game-valorant', 'Valorant', 'valorant', 'FPS', 'Tactical Shooter', ARRAY['PC'], true, true, 1),
+      ('game-bgmi', 'BGMI / PUBG', 'bgmi', 'Battle Royale', 'Mobile', ARRAY['Mobile', 'Android', 'iOS'], true, true, 2),
+      ('game-freefire', 'Free Fire', 'free-fire', 'Battle Royale', 'Mobile', ARRAY['Mobile', 'Android', 'iOS'], true, true, 3),
+      ('game-cs2', 'Counter-Strike 2', 'cs2', 'FPS', 'Tactical Shooter', ARRAY['PC'], true, true, 4),
+      ('game-lol', 'League of Legends', 'league-of-legends', 'MOBA', 'Strategy', ARRAY['PC'], true, false, 5),
+      ('game-dota2', 'Dota 2', 'dota-2', 'MOBA', 'Strategy', ARRAY['PC'], true, false, 6),
+      ('game-apex', 'Apex Legends', 'apex-legends', 'Battle Royale', 'Hero Shooter', ARRAY['PC', 'PlayStation', 'Xbox'], true, true, 7),
+      ('game-fortnite', 'Fortnite', 'fortnite', 'Battle Royale', 'Sandbox', ARRAY['PC', 'PlayStation', 'Xbox', 'Mobile'], true, true, 8),
+      ('game-overwatch2', 'Overwatch 2', 'overwatch-2', 'FPS', 'Hero Shooter', ARRAY['PC', 'PlayStation', 'Xbox'], true, false, 9),
+      ('game-rocketleague', 'Rocket League', 'rocket-league', 'Sports', 'Vehicular Soccer', ARRAY['PC', 'PlayStation', 'Xbox'], true, false, 10),
+      ('game-r6', 'Rainbow Six Siege', 'rainbow-six-siege', 'FPS', 'Tactical', ARRAY['PC', 'PlayStation', 'Xbox'], true, false, 11),
+      ('game-cod', 'Call of Duty: Warzone', 'cod-warzone', 'Battle Royale', 'Military', ARRAY['PC', 'PlayStation', 'Xbox'], true, true, 12),
+      ('game-codm', 'Call of Duty Mobile', 'cod-mobile', 'FPS', 'Mobile', ARRAY['Mobile'], true, false, 13),
+      ('game-clashofclans', 'Clash of Clans', 'clash-of-clans', 'Strategy', 'Mobile', ARRAY['Mobile'], true, false, 14),
+      ('game-clashroyale', 'Clash Royale', 'clash-royale', 'Strategy', 'Card Battler', ARRAY['Mobile'], true, false, 15),
+      ('game-brawlstars', 'Brawl Stars', 'brawl-stars', 'Action', 'Mobile', ARRAY['Mobile'], true, false, 16)
+     ON CONFLICT ("name") DO NOTHING;`,
+
+    // Seed default site settings
+    `INSERT INTO "SiteSetting" ("id", "key", "value", "description", "category")
+     VALUES
+      ('setting-banner-enabled', 'banner_enabled', 'true', 'Show announcement banner at the top of the website', 'announcement'),
+      ('setting-banner-text', 'banner_text', '🔥 Welcome to GamerZ Hub! Discover teammates, join live tournaments, and climb the leaderboards.', 'announcement'),
+      ('setting-banner-type', 'banner_type', 'INFO', 'Announcement banner alert style (INFO, SUCCESS, WARNING)', 'announcement'),
+      ('setting-banner-link', 'banner_link', '/tournaments', 'Optional link for banner action button', 'announcement'),
+      ('setting-maintenance', 'maintenance_mode', 'false', 'Enable maintenance mode for public visitors', 'access'),
+      ('setting-registrations', 'registrations_open', 'true', 'Allow new user registrations', 'access')
+     ON CONFLICT ("key") DO NOTHING;`
   ];
 
   console.log('[AutoMigrate] Executing database schema DDL migrations...');

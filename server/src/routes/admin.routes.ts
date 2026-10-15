@@ -342,5 +342,75 @@ router.delete(
   adminController.deleteTournament.bind(adminController)
 );
 
+// ─── Platform Games Catalog CMS ─────────────────────────────────────────────
+router.get(
+  '/games/catalog',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getGamesCatalog.bind(adminController)
+);
+router.post(
+  '/games',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.createGame.bind(adminController)
+);
+router.put(
+  '/games/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.updateGame.bind(adminController)
+);
+router.patch(
+  '/games/:id/toggle',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.toggleGameStatus.bind(adminController)
+);
+router.delete(
+  '/games/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.deleteGame.bind(adminController)
+);
+
+// ─── User Logins & Live Sessions Tracking ──────────────────────────────────
+router.get(
+  '/logins/stats',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getLoginStats.bind(adminController)
+);
+router.get(
+  '/logins/history',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getLoginHistory.bind(adminController)
+);
+router.delete(
+  '/logins/sessions/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.revokeSession.bind(adminController)
+);
+
+// ─── Platform & Site Configuration ─────────────────────────────────────────
+router.get(
+  '/settings',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getSiteSettings.bind(adminController)
+);
+router.put(
+  '/settings',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.updateSiteSettings.bind(adminController)
+);
+router.get(
+  '/public-settings',
+  adminController.getPublicSettings.bind(adminController)
+);
+
 export default router;
 

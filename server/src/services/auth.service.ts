@@ -67,7 +67,25 @@ export class AuthService {
     };
   }
 
-  async login(email: string, password: string) {
+  async recordLoginEvent(userId: string, email: string, username?: string | null, ip?: string, userAgent?: string, provider = 'credentials') {
+    try {
+      await prisma.userLoginEvent.create({
+        data: {
+          userId,
+          email,
+          username: username || null,
+          ipAddress: ip || null,
+          userAgent: userAgent || null,
+          provider,
+          success: true,
+        },
+      });
+    } catch (err: any) {
+      console.warn('[LoginEvent Warn] Failed to record login event:', err?.message || err);
+    }
+  }
+
+  async login(email: string, password: string, ip?: string, userAgent?: string) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: { profile: true, subscription: true },
@@ -82,7 +100,16 @@ export class AuthService {
     const payload = { userId: user.id, email: user.email, role: user.role };
     const accessToken = generateToken(payload);
     const refreshToken = generateRefreshToken(payload);
-    await prisma.session.create({ data: { refreshToken, userId: user.id, expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) } });
+    await prisma.session.create({
+      data: {
+        refreshToken,
+        userId: user.id,
+        ip: ip || null,
+        userAgent: userAgent || null,
+        expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      },
+    });
+    await this.recordLoginEvent(user.id, user.email, user.profile?.username, ip, userAgent, 'credentials');
     return { user: sanitizeUser(user), accessToken, refreshToken, requiresTwoFactor: user.isTwoFactorEnabled };
   }
 

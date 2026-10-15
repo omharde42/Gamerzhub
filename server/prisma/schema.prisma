@@ -40,6 +40,7 @@ model User {
   accounts        Account[]
   sessions        Session[]
   devices         Device[]
+  loginEvents     UserLoginEvent[]
   posts           Post[]
   comments        Comment[]
   likes           Like[]
@@ -194,10 +195,12 @@ model Session {
   userAgent    String?
   ip           String?
   expiresAt    DateTime
+  createdAt    DateTime @default(now())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
   @@index([refreshToken])
+  @@index([createdAt])
 }
 
 model Device {
@@ -1843,3 +1846,61 @@ model NewsArticle {
   @@index([publishedAt])
 }
 
+// ─── Platform Games Catalog ────────────────────────────────────────────────
+
+model PlatformGame {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  genre       String   @default("Battle Royale")
+  category    String   @default("Popular")
+  description String?
+  logo        String?
+  bannerUrl   String?
+  platforms   String[] @default(["PC", "Mobile"])
+  modes       String[] @default(["Solo", "Squad"])
+  isEnabled   Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isEnabled])
+  @@index([isFeatured])
+  @@index([genre])
+}
+
+// ─── User Login Tracking & Historical Sessions ──────────────────────────────
+
+model UserLoginEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String
+  username  String?
+  ipAddress String?
+  userAgent String?
+  device    String?
+  provider  String   @default("credentials")
+  success   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([provider])
+}
+
+// ─── Global Platform & Site Configuration ───────────────────────────────────
+
+model SiteSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  category    String   @default("general")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([category])
+}

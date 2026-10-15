@@ -66,13 +66,15 @@ export default function GamesPage() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to submit request'),
   });
 
-  // Combine hardcoded + approved games
-  const allGames = [
-    ...GAMES.map(g => ({ gameName: g, genre: 'Popular', logo: null, isDefault: true })),
-    ...(approvedGames || []).map((g: any) => ({ ...g, isDefault: false })),
-  ];
+  // Dynamic games list managed from Admin Panel (falls back to GAMES if loading)
+  const allGames = (approvedGames && approvedGames.length > 0)
+    ? approvedGames.map((g: any) => ({
+        ...g,
+        isDefault: !g.isPlatformGame && !g.id,
+      }))
+    : GAMES.map((g: string) => ({ gameName: g, genre: 'Popular', logo: null, isDefault: true }));
 
-  const filteredGames = allGames.filter(g =>
+  const filteredGames = allGames.filter((g: any) =>
     g.gameName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -209,7 +211,7 @@ export default function GamesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {filteredGames.map((game, idx) => (
+              {filteredGames.map((game: any, idx: number) => (
                 <div
                   key={`${game.gameName}-${idx}`}
                   className="group relative flex flex-col items-center justify-center p-4 rounded-2xl border border-primary/10 bg-muted/10 hover:border-primary/30 hover:bg-primary/5 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 cursor-default h-28"

@@ -11,7 +11,7 @@ import {
   Shield, Users, Trophy, Gamepad2, Swords, AlertTriangle,
   Loader2, LayoutDashboard, ShieldAlert, ExternalLink,
   Menu, X, Clock, FileText, ShoppingBag, Package,
-  Newspaper, MessageSquare, Briefcase
+  Newspaper, MessageSquare, Briefcase, LogIn, Settings
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 
@@ -29,6 +29,8 @@ import { AdminOrdersTab } from '@/components/admin/orders-tab';
 import { AdminNewsTab } from '@/components/admin/news-tab';
 import { AdminFeedTab } from '@/components/admin/feed-tab';
 import { AdminJobsTab } from '@/components/admin/jobs-tab';
+import { AdminLoginsTab } from '@/components/admin/logins-tab';
+import { AdminSettingsTab } from '@/components/admin/settings-tab';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -98,13 +100,15 @@ export default function AdminPage() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'games', label: 'Games Catalog & CMS', icon: Gamepad2, badge: pendingGamesCount > 0 ? `${pendingGamesCount} req` : null, badgeColor: 'bg-primary/20 text-primary border-primary/30' },
+    { id: 'logins', label: 'User Logins & Sessions', icon: LogIn, badge: stats?.users?.active ? `${stats.users.active} users` : null, badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     { id: 'news', label: 'News & Editorial', icon: Newspaper },
+    { id: 'settings', label: 'Platform & Site Settings', icon: Settings },
     { id: 'feed', label: 'Community Feed', icon: MessageSquare },
     { id: 'jobs', label: 'Careers & Jobs', icon: Briefcase },
     { id: 'users', label: 'Users & Gamers', icon: Users },
     { id: 'squads', label: 'Squad Continuity', icon: Shield, badge: stats?.squads?.invitesPending > 0 ? `${stats.squads.invitesPending} inv` : null, badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     { id: 'tournaments', label: 'Tournaments', icon: Trophy, badge: stats?.tournaments?.byStatus?.IN_PROGRESS > 0 ? `${stats.tournaments.byStatus.IN_PROGRESS} live` : null, badgeColor: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
-    { id: 'games', label: 'Game Library', icon: Gamepad2, badge: pendingGamesCount > 0 ? `${pendingGamesCount} req` : null, badgeColor: 'bg-primary/20 text-primary border-primary/30' },
     { id: 'sessions', label: 'Gaming Sessions', icon: Swords },
     { id: 'reports', label: 'Moderation Queue', icon: AlertTriangle, badge: pendingReportsCount > 0 ? `${pendingReportsCount}` : null, badgeColor: 'bg-red-500/20 text-red-400 border-red-500/30' },
     { id: 'audit-logs', label: 'Security & Audit Logs', icon: FileText },
@@ -215,6 +219,10 @@ export default function AdminPage() {
           )}
 
           {activeTab === 'news' && <AdminNewsTab />}
+
+          {activeTab === 'logins' && <AdminLoginsTab />}
+
+          {activeTab === 'settings' && <AdminSettingsTab />}
 
           {activeTab === 'feed' && <AdminFeedTab />}
 
