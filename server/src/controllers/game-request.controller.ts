@@ -122,6 +122,11 @@ export class GameRequestController {
       data: { status: 'APPROVED', adminNote },
     });
 
+    try {
+      const { logAdminAction } = await import('./admin.controller');
+      await logAdminAction(req.user!.userId, 'GAME_REQUEST_APPROVED', 'GameRequest', id, { gameName: request.gameName, adminNote }, req.ip, req.headers['user-agent']);
+    } catch {}
+
     sendSuccess(res, updated, 'Game request approved');
   });
 
@@ -138,6 +143,11 @@ export class GameRequestController {
       where: { id },
       data: { status: 'REJECTED', adminNote },
     });
+
+    try {
+      const { logAdminAction } = await import('./admin.controller');
+      await logAdminAction(req.user!.userId, 'GAME_REQUEST_REJECTED', 'GameRequest', id, { gameName: request.gameName, adminNote }, req.ip, req.headers['user-agent']);
+    } catch {}
 
     sendSuccess(res, updated, 'Game request rejected');
   });

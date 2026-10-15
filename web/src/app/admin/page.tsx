@@ -1,353 +1,231 @@
 'use client';
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import {
-  Shield, Users, Trophy, Briefcase, Building2, AlertTriangle,
-  Ban, CheckCircle, FileText, Gamepad2, Clock, XCircle, Loader2, Handshake
+  Shield, Users, Trophy, Gamepad2, Swords, AlertTriangle,
+  Loader2, LayoutDashboard, ShieldAlert, ExternalLink,
+  Menu, X, Clock, FileText, ShoppingBag, Package
 } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { formatDate } from '@/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { TournamentModerationDashboard } from '@/components/admin/tournament-moderation';
+import { useAuthStore } from '@/store/authStore';
+
+// Modular Admin Tab Components
+import { AdminDashboardTab } from '@/components/admin/dashboard-tab';
+import { AdminUsersTab } from '@/components/admin/users-tab';
+import { AdminSquadsTab } from '@/components/admin/squads-tab';
+import { AdminTournamentsTab } from '@/components/admin/tournaments-tab';
+import { AdminGamesTab } from '@/components/admin/games-tab';
+import { AdminSessionsTab } from '@/components/admin/sessions-tab';
+import { AdminReportsTab } from '@/components/admin/reports-tab';
+import { AdminAuditLogsTab } from '@/components/admin/audit-logs-tab';
+import { AdminProductsTab } from '@/components/admin/products-tab';
+import { AdminOrdersTab } from '@/components/admin/orders-tab';
 
 export default function AdminPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
+  const { user, isAuthenticated } = useAuthStore();
 
-  const { data: stats } = useQuery({ queryKey: ['admin-stats'], queryFn: () => api.get('/admin/dashboard').then(r => r.data.data) });
-  const { data: reports } = useQuery({ queryKey: ['admin-reports'], queryFn: () => api.get('/admin/reports').then(r => r.data) });
-  const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: () => api.get('/admin/users').then(r => r.data) });
-  const { data: gameRequests, isLoading: grLoading } = useQuery({
-    queryKey: ['admin-game-requests'],
-    queryFn: () => api.get('/game-requests/all').then(r => r.data.data),
-  });
-  const { data: partnershipApps, isLoading: pLoading } = useQuery({
-    queryKey: ['admin-partnerships'],
-    queryFn: () => api.get('/partnerships/admin').then(r => r.data.data || []),
-  });
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const banUser = useMutation({
-    mutationFn: (userId: string) => api.post(`/admin/users/${userId}/ban`, { reason: 'Violation of terms' }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-users'] }); toast.success('User banned'); },
-  });
+  // Check auth and role access
+  const isAuthorizedAdmin =
+    isAuthenticated && (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN');
 
-  const approveGame = useMutation({
-    mutationFn: (id: string) => api.post(`/game-requests/${id}/approve`, { adminNote: adminNotes[id] || '' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-game-requests'] });
-      toast.success('Game request approved!');
-    },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed'),
-  });
+  useEffect(() => {
+    if (!isAuthenticated) {
+      const timer = setTimeout(() => {
+        router.push('/auth/login');
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, router]);
 
-  const rejectGame = useMutation({
-    mutationFn: (id: string) => api.post(`/game-requests/${id}/reject`, { adminNote: adminNotes[id] || '' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-game-requests'] });
-      toast.success('Game request rejected');
-    },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed'),
+  // Primary Dashboard Data
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useQuery({
+    queryKey: ['admin-stats'],
+    queryFn: () => api.get('/admin/dashboard').then((r) => r.data.data),
+    enabled: isAuthorizedAdmin,
   });
 
-  const reviewPartnership = useMutation({
-    mutationFn: ({ id, decision }: { id: string; decision: 'APPROVED' | 'REJECTED' }) =>
-      api.post(`/partnerships/admin/${id}/review`, { decision, adminNote: adminNotes[id] || '' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-partnerships'] });
-      toast.success('Application reviewed');
-    },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed'),
-  });
+  // Handle unauthorized state (Security Guard)
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-6">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-8 w-8 text-primary animate-spin mx-auto" />
+          <p className="text-xs text-muted-foreground font-mono">Verifying administrative credentials...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const pendingGames = gameRequests?.filter((r: any) => r.status === 'PENDING') || [];
-  const pendingPartnerships = partnershipApps?.filter((r: any) => r.status === 'PENDING') || [];
+  if (!isAuthorizedAdmin) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-6">
+        <Card className="max-w-md w-full glass-card text-center p-6 border-red-500/30">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4 text-red-500">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-extrabold text-foreground tracking-tight">Access Restricted</h2>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+            Administrative privileges required. Account ({user?.email}) does not possess the permissions necessary to view the GamerZ Hub Admin Panel.
+          </p>
+          <Button onClick={() => router.push('/dashboard')} className="mt-6 w-full text-xs font-semibold">
+            Return to Public Website
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
-  const statCards = [
-    { label: 'Users', value: stats?.users || 0, icon: Users, color: 'text-blue-500' },
-    { label: 'Tournaments', value: stats?.tournaments || 0, icon: Trophy, color: 'text-yellow-500' },
-    { label: 'Jobs', value: stats?.jobs || 0, icon: Briefcase, color: 'text-green-500' },
-    { label: 'Organizations', value: stats?.orgs || 0, icon: Building2, color: 'text-violet-500' },
-    { label: 'Pending Reports', value: stats?.pendingReports || 0, icon: AlertTriangle, color: 'text-red-500' },
-    { label: 'Game Requests', value: pendingGames.length, icon: Gamepad2, color: 'text-gaming-purple' },
+  const pendingReportsCount = (stats?.moderation?.pendingUserReports || 0) + (stats?.moderation?.pendingTournamentReports || 0);
+  const pendingGamesCount = stats?.moderation?.pendingGameRequests || 0;
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'users', label: 'Users & Gamers', icon: Users },
+    { id: 'squads', label: 'Squad Continuity', icon: Shield, badge: stats?.squads?.invitesPending > 0 ? `${stats.squads.invitesPending} inv` : null, badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    { id: 'tournaments', label: 'Tournaments', icon: Trophy, badge: stats?.tournaments?.byStatus?.IN_PROGRESS > 0 ? `${stats.tournaments.byStatus.IN_PROGRESS} live` : null, badgeColor: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
+    { id: 'games', label: 'Game Library', icon: Gamepad2, badge: pendingGamesCount > 0 ? `${pendingGamesCount} req` : null, badgeColor: 'bg-primary/20 text-primary border-primary/30' },
+    { id: 'sessions', label: 'Gaming Sessions', icon: Swords },
+    { id: 'reports', label: 'Moderation Queue', icon: AlertTriangle, badge: pendingReportsCount > 0 ? `${pendingReportsCount}` : null, badgeColor: 'bg-red-500/20 text-red-400 border-red-500/30' },
+    { id: 'audit-logs', label: 'Security & Audit Logs', icon: FileText },
+    { id: 'products', label: 'Products & Store', icon: Package },
+    { id: 'orders', label: 'Orders & Payments', icon: ShoppingBag, badge: stats?.orders?.byStatus?.PENDING ? `${stats.orders.byStatus.PENDING}` : null, badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   ];
 
   return (
-    <div className="space-y-6 p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">
-          <Shield className="h-6 w-6 inline mr-2 text-primary" />
-          Admin Panel
-        </h1>
-        <Badge variant="default">Admin</Badge>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Top Admin Navigation Header */}
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/90 backdrop-blur-md px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden h-9 w-9 p-0"
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary">
+              <Shield className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm tracking-tight text-foreground">GamerZ Hub</span>
+                <Badge variant="default" className="text-[9px] px-1.5 py-0 uppercase tracking-widest font-bold">
+                  {user?.role}
+                </Badge>
+              </div>
+              <p className="text-[10px] text-muted-foreground hidden sm:block">
+                Autonomous Administration &amp; Moderation Control Plane
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/dashboard')}
+            className="text-xs gap-1.5 text-muted-foreground hover:text-foreground h-8"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Return to Website
+          </Button>
+        </div>
+      </header>
+
+      {/* Main Layout Body */}
+      <div className="flex-1 flex flex-col md:flex-row max-w-7xl w-full mx-auto p-4 sm:p-6 gap-6">
+        {/* Sidebar Nav */}
+        <aside
+          className={`${
+            mobileMenuOpen ? 'block' : 'hidden'
+          } md:block w-full md:w-60 shrink-0 space-y-1.5 bg-card/20 md:bg-transparent p-3 md:p-0 rounded-2xl border md:border-none border-border/60`}
+        >
+          <div className="px-3 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider hidden md:block">
+            Management Modules
+          </div>
+
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-card/50'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`h-4 w-4 ${isActive ? 'text-primary-foreground' : 'text-primary'}`} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge && (
+                  <Badge
+                    variant="outline"
+                    className={`text-[9px] px-1.5 py-0 ${
+                      isActive ? 'bg-primary-foreground/20 text-primary-foreground border-transparent' : item.badgeColor
+                    }`}
+                  >
+                    {item.badge}
+                  </Badge>
+                )}
+              </button>
+            );
+          })}
+        </aside>
+
+        {/* Dynamic Tab Body */}
+        <main className="flex-1 min-w-0">
+          {activeTab === 'dashboard' && (
+            <AdminDashboardTab
+              stats={stats}
+              isLoading={statsLoading}
+              onRefresh={refetchStats}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {activeTab === 'users' && <AdminUsersTab />}
+
+          {activeTab === 'squads' && <AdminSquadsTab />}
+
+          {activeTab === 'tournaments' && <AdminTournamentsTab />}
+
+          {activeTab === 'games' && <AdminGamesTab />}
+
+          {activeTab === 'sessions' && <AdminSessionsTab />}
+
+          {activeTab === 'reports' && <AdminReportsTab />}
+
+          {activeTab === 'audit-logs' && <AdminAuditLogsTab />}
+
+          {activeTab === 'products' && <AdminProductsTab />}
+
+          {activeTab === 'orders' && <AdminOrdersTab />}
+        </main>
       </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {statCards.map((s, i) => (
-          <Card key={i} className="glass-card">
-            <CardContent className="p-4 text-center">
-              <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center mx-auto mb-2">
-                <s.icon className={`h-5 w-5 ${s.color}`} />
-              </div>
-              <p className="text-2xl font-bold">{s.value}</p>
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Tabs defaultValue="game-requests">
-        <TabsList>
-          <TabsTrigger value="game-requests" className="gap-1">
-            <Gamepad2 className="h-4 w-4" /> Game Requests
-            {pendingGames.length > 0 && (
-              <Badge variant="destructive" className="ml-1 text-[9px] px-1.5 py-0">{pendingGames.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" /> Users</TabsTrigger>
-          <TabsTrigger value="reports" className="gap-1"><AlertTriangle className="h-4 w-4" /> Reports</TabsTrigger>
-          <TabsTrigger value="partnerships" className="gap-1">
-            <Handshake className="h-4 w-4" /> Partnerships
-            {pendingPartnerships.length > 0 && (
-              <Badge variant="destructive" className="ml-1 text-[9px] px-1.5 py-0">{pendingPartnerships.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="tournament-moderation" className="gap-1"><Shield className="h-4 w-4" /> Tournament Moderation</TabsTrigger>
-        </TabsList>
-
-        {/* Game Requests Tab */}
-        <TabsContent value="game-requests">
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Gamepad2 className="h-5 w-5 text-gaming-purple" />
-                Game Submission Requests
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              {grLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                </div>
-              ) : !gameRequests || gameRequests.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground space-y-2">
-                  <Gamepad2 className="h-10 w-10 mx-auto text-muted-foreground/30" />
-                  <p className="font-semibold text-foreground">No game requests</p>
-                  <p className="text-xs">Users haven't submitted any game requests yet.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {gameRequests.map((req: any) => {
-                    const isPending = req.status === 'PENDING';
-                    return (
-                      <div key={req.id} className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-xl border transition-all duration-200 ${isPending ? 'border-yellow-500/20 bg-yellow-500/5' : req.status === 'APPROVED' ? 'border-green-500/10 bg-green-500/5' : 'border-red-500/10 bg-red-500/5'}`}>
-                        <div className="flex items-center gap-4 min-w-0">
-                          {req.logo ? (
-                            <img src={req.logo} alt={req.gameName} className="h-12 w-12 rounded-xl object-cover border border-primary/10 shrink-0" loading="lazy" decoding="async" />
-                          ) : (
-                            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/10">
-                              <Gamepad2 className="h-6 w-6 text-primary" />
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-sm text-foreground">{req.gameName}</h4>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
-                              <span className="flex items-center gap-1"><Gamepad2 className="h-3 w-3" /> {req.genre}</span>
-                              <span className="text-border">•</span>
-                              <span>by {req.user?.profile?.username || 'Unknown'}</span>
-                              <span className="text-border">•</span>
-                              <span>{formatDate(req.createdAt)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {isPending ? (
-                            <>
-                              <Input
-                                value={adminNotes[req.id] || ''}
-                                onChange={(e) => setAdminNotes(prev => ({ ...prev, [req.id]: e.target.value }))}
-                                placeholder="Admin note (optional)"
-                                className="h-9 text-xs border-primary/20 w-40 lg:w-48"
-                              />
-                              <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 text-white h-9 gap-1 text-xs"
-                                onClick={() => approveGame.mutate(req.id)}
-                                disabled={approveGame.isPending}
-                              >
-                                <CheckCircle className="h-3.5 w-3.5" /> Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                className="h-9 gap-1 text-xs"
-                                onClick={() => rejectGame.mutate(req.id)}
-                                disabled={rejectGame.isPending}
-                              >
-                                <XCircle className="h-3.5 w-3.5" /> Reject
-                              </Button>
-                            </>
-                          ) : (
-                            <Badge variant="outline" className={`text-xs font-semibold ${req.status === 'APPROVED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                              {req.status === 'APPROVED' ? <CheckCircle className="h-3.5 w-3.5 mr-1" /> : <XCircle className="h-3.5 w-3.5 mr-1" />}
-                              {req.status}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Users Tab */}
-        <TabsContent value="users">
-          <Card className="glass-card">
-            <CardContent className="p-4 sm:p-6">
-              <div className="space-y-3">
-                {users?.data?.map((u: any, i: number) => (
-                  <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-border">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Avatar className="h-10 w-10 shrink-0">
-                        <AvatarImage src={u.profile?.avatar || ''} />
-                        <AvatarFallback>{u.profile?.username?.charAt(0) || 'U'}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{u.profile?.username || u.email}</p>
-                        <p className="text-xs text-muted-foreground truncate">{u.email} • {u.role}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      {u.banned ? (
-                        <Badge variant="destructive">Banned</Badge>
-                      ) : (
-                        <Button variant="ghost" size="sm" className="text-destructive h-10 w-full sm:w-auto" onClick={() => banUser.mutate(u.id)}>
-                          <Ban className="h-3 w-3 mr-1" />Ban
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Partnerships Tab */}
-        <TabsContent value="partnerships">
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Handshake className="h-5 w-5 text-gaming-purple" />
-                Partnership & Sponsorship Applications
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              {pLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                </div>
-              ) : !partnershipApps || partnershipApps.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground space-y-2">
-                  <Handshake className="h-10 w-10 mx-auto text-muted-foreground/30" />
-                  <p className="font-semibold text-foreground">No applications</p>
-                  <p className="text-xs">No partnership or sponsorship applications yet.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {partnershipApps.map((app: any) => {
-                    const isPending = app.status === 'PENDING';
-                    return (
-                      <div key={app.id} className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-xl border transition-all duration-200 ${isPending ? 'border-yellow-500/20 bg-yellow-500/5' : app.status === 'APPROVED' ? 'border-green-500/10 bg-green-500/5' : 'border-red-500/10 bg-red-500/5'}`}>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="font-bold text-sm text-foreground">{app.organizationName}</h4>
-                            <Badge variant="outline" className="text-[9px] px-2 py-0 bg-primary/10 text-primary border-primary/20">
-                              {app.type === 'PARTNERSHIP' ? '🤝 Partnership' : '📢 Sponsorship'}
-                            </Badge>
-                            <Badge variant="outline" className={`text-[10px] font-semibold ${isPending ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : app.status === 'APPROVED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                              {app.status}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-1">
-                            <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {app.user?.profile?.username || 'Unknown'}</span>
-                            <span className="text-border">•</span>
-                            <span>{app.contactName} &lt;{app.contactEmail}&gt;</span>
-                            {app.website && <><span className="text-border">•</span><a href={app.website} target="_blank" rel="noreferrer" className="text-primary hover:underline">{app.website}</a></>}
-                          </div>
-                          <p className="text-xs text-foreground/80 mt-2 leading-relaxed">{app.description}</p>
-                          {app.audience && <p className="text-[11px] text-muted-foreground mt-1">Audience: {app.audience}</p>}
-                          <p className="text-[10px] text-muted-foreground mt-1.5">Submitted {formatDate(app.createdAt)}{app.adminNote ? ` • Note: ${app.adminNote}` : ''}</p>
-                        </div>
-
-                        {isPending && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Input
-                              value={adminNotes[app.id] || ''}
-                              onChange={(e) => setAdminNotes(prev => ({ ...prev, [app.id]: e.target.value }))}
-                              placeholder="Admin note (optional)"
-                              className="h-9 text-xs border-primary/20 w-40 lg:w-48"
-                            />
-                            <Button
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700 text-white h-9 gap-1 text-xs"
-                              onClick={() => reviewPartnership.mutate({ id: app.id, decision: 'APPROVED' })}
-                              disabled={reviewPartnership.isPending}
-                            >
-                              <CheckCircle className="h-3.5 w-3.5" /> Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="h-9 gap-1 text-xs"
-                              onClick={() => reviewPartnership.mutate({ id: app.id, decision: 'REJECTED' })}
-                              disabled={reviewPartnership.isPending}
-                            >
-                              <XCircle className="h-3.5 w-3.5" /> Reject
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Reports Tab */}
-        <TabsContent value="reports">
-          <Card className="glass-card">
-            <CardContent className="p-4 sm:p-6">
-              <div className="space-y-3">
-                {reports?.data?.map((r: any, i: number) => (
-                  <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-border">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{r.reason}</p>
-                      <p className="text-xs text-muted-foreground truncate">{r.description} • {formatDate(r.createdAt)}</p>
-                    </div>
-                    <Badge variant={r.status === 'PENDING' ? 'warning' as any : 'success' as any} className="w-fit shrink-0">{r.status}</Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="tournament-moderation">
-          <TournamentModerationDashboard />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }

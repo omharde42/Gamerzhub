@@ -111,6 +111,7 @@ model User {
   organizerRatings    TournamentOrganizerRating[]
   enteredResults      TournamentResult[] @relation("EnteredResults")
   finalizedResults    TournamentResult[] @relation("FinalizedResults")
+  orders              Order[]
   @@index([email])
   @@index([gamerzId])
   @@index([role])
@@ -1731,3 +1732,89 @@ model FreeFireSessionRating {
   @@index([raterId])
   @@index([ratedUserId])
 }
+
+// ─── E-Commerce & Marketplace Management ─────────────────────────────────────
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  category    String
+  price       Float
+  stock       Int           @default(0)
+  images      String[]      @default([])
+  status      ProductStatus @default(ACTIVE)
+  sizes       String[]      @default([])
+  colors      String[]      @default([])
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  orderItems  OrderItem[]
+
+  @@index([category])
+  @@index([status])
+  @@index([name])
+}
+
+model Order {
+  id              String        @id @default(uuid())
+  orderNumber     String        @unique
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          OrderStatus   @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  totalAmount     Float
+  currency        String        @default("USD")
+  shippingAddress Json?
+  stripePaymentId String?
+  notes           String?
+  items           OrderItem[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity   Int      @default(1)
+  unitPrice  Float
+  totalPrice Float
+  size       String?
+  color      String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+

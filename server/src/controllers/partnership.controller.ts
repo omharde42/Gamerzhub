@@ -73,6 +73,10 @@ export class PartnershipController {
       throw new ValidationError({ decision: ['Decision must be APPROVED or REJECTED'] });
     }
     const application = await partnershipService.review(req.user!.userId, req.params.id, decision, adminNote);
+    try {
+      const { logAdminAction } = await import('./admin.controller');
+      await logAdminAction(req.user!.userId, 'PARTNERSHIP_REVIEWED', 'PartnershipApplication', req.params.id, { decision, adminNote, organizationName: (application as any)?.organizationName }, req.ip, req.headers['user-agent']);
+    } catch {}
     sendSuccess(res, application, `Application ${decision.toLowerCase()}`);
   });
 }

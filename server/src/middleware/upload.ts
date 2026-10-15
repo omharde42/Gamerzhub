@@ -47,3 +47,6 @@ export const uploadScreenshot = multer({ storage, limits: { fileSize: 10 * 1024 
 export const uploadClip = multer({ storage: diskStorage, limits: { fileSize: 2 * 1024 * 1024 * 1024 }, fileFilter }).single('video');
 // Music track uploads for montage audio (up to 50MB).
 export const uploadMusic = multer({ storage: diskStorage, limits: { fileSize: 50 * 1024 * 1024 }, fileFilter }).single('music');
+// Product and item uploads (up to 10MB)
+export const uploadProductImage = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter }).single('image');
+
