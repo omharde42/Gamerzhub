@@ -1818,3 +1818,28 @@ model OrderItem {
   @@index([productId])
 }
 
+// ─── News & Editorial CMS ───────────────────────────────────────────────────
+
+model NewsArticle {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String?  @unique
+  summary     String?
+  content     String?
+  imageUrl    String?
+  source      String   @default("GamerZ Hub Editorial")
+  sourceUrl   String?
+  category    String   @default("Esports")
+  author      String?  @default("GamerZ Hub Admin")
+  isFeatured  Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished])
+  @@index([isFeatured])
+  @@index([category])
+  @@index([publishedAt])
+}
+

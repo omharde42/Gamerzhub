@@ -10,7 +10,8 @@ import api from '@/lib/api';
 import {
   Shield, Users, Trophy, Gamepad2, Swords, AlertTriangle,
   Loader2, LayoutDashboard, ShieldAlert, ExternalLink,
-  Menu, X, Clock, FileText, ShoppingBag, Package
+  Menu, X, Clock, FileText, ShoppingBag, Package,
+  Newspaper, MessageSquare, Briefcase
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 
@@ -25,6 +26,9 @@ import { AdminReportsTab } from '@/components/admin/reports-tab';
 import { AdminAuditLogsTab } from '@/components/admin/audit-logs-tab';
 import { AdminProductsTab } from '@/components/admin/products-tab';
 import { AdminOrdersTab } from '@/components/admin/orders-tab';
+import { AdminNewsTab } from '@/components/admin/news-tab';
+import { AdminFeedTab } from '@/components/admin/feed-tab';
+import { AdminJobsTab } from '@/components/admin/jobs-tab';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -94,6 +98,9 @@ export default function AdminPage() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'news', label: 'News & Editorial', icon: Newspaper },
+    { id: 'feed', label: 'Community Feed', icon: MessageSquare },
+    { id: 'jobs', label: 'Careers & Jobs', icon: Briefcase },
     { id: 'users', label: 'Users & Gamers', icon: Users },
     { id: 'squads', label: 'Squad Continuity', icon: Shield, badge: stats?.squads?.invitesPending > 0 ? `${stats.squads.invitesPending} inv` : null, badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     { id: 'tournaments', label: 'Tournaments', icon: Trophy, badge: stats?.tournaments?.byStatus?.IN_PROGRESS > 0 ? `${stats.tournaments.byStatus.IN_PROGRESS} live` : null, badgeColor: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
@@ -206,6 +213,12 @@ export default function AdminPage() {
               onNavigateTab={(tab) => setActiveTab(tab)}
             />
           )}
+
+          {activeTab === 'news' && <AdminNewsTab />}
+
+          {activeTab === 'feed' && <AdminFeedTab />}
+
+          {activeTab === 'jobs' && <AdminJobsTab />}
 
           {activeTab === 'users' && <AdminUsersTab />}
 

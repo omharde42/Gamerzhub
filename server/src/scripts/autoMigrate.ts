@@ -211,7 +211,32 @@ export async function applyRawMigrations(): Promise<{ success: boolean; executed
       ) THEN
         ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
       END IF;
-    END $$;`
+    END $$;`,
+
+    // 10. NewsArticle table creation (Editorial & News CMS)
+    `CREATE TABLE IF NOT EXISTS "NewsArticle" (
+      "id" TEXT NOT NULL,
+      "title" TEXT NOT NULL,
+      "slug" TEXT,
+      "summary" TEXT,
+      "content" TEXT,
+      "imageUrl" TEXT,
+      "source" TEXT NOT NULL DEFAULT 'GamerZ Hub Editorial',
+      "sourceUrl" TEXT,
+      "category" TEXT NOT NULL DEFAULT 'Esports',
+      "author" TEXT DEFAULT 'GamerZ Hub Admin',
+      "isFeatured" BOOLEAN NOT NULL DEFAULT false,
+      "isPublished" BOOLEAN NOT NULL DEFAULT true,
+      "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "NewsArticle_pkey" PRIMARY KEY ("id")
+    );`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "NewsArticle_slug_key" ON "NewsArticle"("slug");`,
+    `CREATE INDEX IF NOT EXISTS "NewsArticle_isPublished_idx" ON "NewsArticle"("isPublished");`,
+    `CREATE INDEX IF NOT EXISTS "NewsArticle_isFeatured_idx" ON "NewsArticle"("isFeatured");`,
+    `CREATE INDEX IF NOT EXISTS "NewsArticle_category_idx" ON "NewsArticle"("category");`,
+    `CREATE INDEX IF NOT EXISTS "NewsArticle_publishedAt_idx" ON "NewsArticle"("publishedAt");`
   ];
 
   console.log('[AutoMigrate] Executing database schema DDL migrations...');

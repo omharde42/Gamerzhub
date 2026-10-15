@@ -250,4 +250,97 @@ router.patch(
   adminController.updateOrderStatus.bind(adminController)
 );
 
+// ─── News & Editorial Management ────────────────────────────────────────────
+router.get(
+  '/news',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getNews.bind(adminController)
+);
+router.post(
+  '/news',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.createNews.bind(adminController)
+);
+router.put(
+  '/news/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.updateNews.bind(adminController)
+);
+router.delete(
+  '/news/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.deleteNews.bind(adminController)
+);
+router.patch(
+  '/news/:id/toggle-publish',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.toggleNewsPublish.bind(adminController)
+);
+router.patch(
+  '/news/:id/toggle-feature',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.toggleNewsFeatured.bind(adminController)
+);
+
+// ─── Community Feed & Posts Moderation ──────────────────────────────────────
+router.get(
+  '/feed/posts',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getFeedPosts.bind(adminController)
+);
+router.delete(
+  '/feed/posts/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.deleteFeedPost.bind(adminController)
+);
+router.patch(
+  '/feed/posts/:id/toggle-pin',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.togglePinFeedPost.bind(adminController)
+);
+
+// ─── Careers & Esports Jobs ─────────────────────────────────────────────────
+router.get(
+  '/jobs',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.getJobs.bind(adminController)
+);
+router.post(
+  '/jobs',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.createJob.bind(adminController)
+);
+router.delete(
+  '/jobs/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.deleteJob.bind(adminController)
+);
+
+// ─── Tournament Creation & Deletion ─────────────────────────────────────────
+router.post(
+  '/tournaments',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.createTournament.bind(adminController)
+);
+router.delete(
+  '/tournaments/:id',
+  authenticate,
+  authorize('ADMIN', 'SUPER_ADMIN'),
+  adminController.deleteTournament.bind(adminController)
+);
+
 export default router;
+

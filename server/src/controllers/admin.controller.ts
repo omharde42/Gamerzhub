@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import prisma from '../config/database';
 import { asyncHandler } from '../utils/asyncHandler';
-import { sendSuccess } from '../utils/response';
+import { sendSuccess, sendError } from '../utils/response';
 import { tournamentService } from '../services/tournament.service';
 import { mediaStorageService } from '../utils/storage';
 import { AppError, NotFoundError, ValidationError } from '../utils/errors';
@@ -1576,6 +1576,499 @@ export class AdminController {
     const tournament = await tournamentService.suspendTournamentByAdmin(req.params.id, req.user!.userId, reason || 'Admin suspension');
     await logAdminAction(req.user!.userId, 'TOURNAMENT_SUSPENDED', 'Tournament', req.params.id, { reason });
     sendSuccess(res, tournament, 'Tournament suspended');
+  });
+
+  // ─── News & Editorial CMS ─────────────────────────────────────────────────
+  getNews = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page = '1', limit = '20', search = '', category = '', status = 'ALL' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (category && category !== 'ALL') where.category = category;
+    if (status === 'PUBLISHED') where.isPublished = true;
+    if (status === 'DRAFT') where.isPublished = false;
+    if (status === 'FEATURED') where.isFeatured = true;
+
+    if (search && typeof search === 'string') {
+      const q = search.trim();
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { summary: { contains: q, mode: 'insensitive' } },
+        { category: { contains: q, mode: 'insensitive' } },
+        { author: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [articles, total] = await Promise.all([
+      (prisma as any).newsArticle.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: [{ isFeatured: 'desc' }, { publishedAt: 'desc' }],
+      }),
+      (prisma as any).newsArticle.count({ where }),
+    ]);
+
+    sendSuccess(res, articles, undefined, 200, {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    });
+  });
+
+  createNews = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { title, summary, content, imageUrl, source, sourceUrl, category, author, isFeatured, isPublished } = req.body;
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return sendError(res, 400, 'Article title is required');
+    }
+
+    const rawSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const slug = `${rawSlug}-${Math.random().toString(36).substring(2, 7)}`;
+
+    const article = await (prisma as any).newsArticle.create({
+      data: {
+        title: title.trim(),
+        slug,
+        summary: summary?.trim() || null,
+        content: content?.trim() || null,
+        imageUrl: imageUrl?.trim() || null,
+        source: source?.trim() || 'GamerZ Hub Editorial',
+        sourceUrl: sourceUrl?.trim() || null,
+        category: category?.trim() || 'Esports',
+        author: author?.trim() || 'GamerZ Hub Admin',
+        isFeatured: Boolean(isFeatured),
+        isPublished: isPublished !== undefined ? Boolean(isPublished) : true,
+      },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'NEWS_CREATED',
+      'NewsArticle',
+      article.id,
+      { title: article.title, category: article.category },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, article, 'News article created successfully', 201);
+  });
+
+  updateNews = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { title, summary, content, imageUrl, source, sourceUrl, category, author, isFeatured, isPublished } = req.body;
+
+    const existing = await (prisma as any).newsArticle.findUnique({ where: { id } });
+    if (!existing) {
+      return sendError(res, 404, 'News article not found');
+    }
+
+    const article = await (prisma as any).newsArticle.update({
+      where: { id },
+      data: {
+        ...(title ? { title: title.trim() } : {}),
+        ...(summary !== undefined ? { summary: summary?.trim() || null } : {}),
+        ...(content !== undefined ? { content: content?.trim() || null } : {}),
+        ...(imageUrl !== undefined ? { imageUrl: imageUrl?.trim() || null } : {}),
+        ...(source !== undefined ? { source: source?.trim() || 'GamerZ Hub Editorial' } : {}),
+        ...(sourceUrl !== undefined ? { sourceUrl: sourceUrl?.trim() || null } : {}),
+        ...(category !== undefined ? { category: category?.trim() || 'Esports' } : {}),
+        ...(author !== undefined ? { author: author?.trim() || 'GamerZ Hub Admin' } : {}),
+        ...(isFeatured !== undefined ? { isFeatured: Boolean(isFeatured) } : {}),
+        ...(isPublished !== undefined ? { isPublished: Boolean(isPublished) } : {}),
+      },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'NEWS_UPDATED',
+      'NewsArticle',
+      id,
+      { title: article.title },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, article, 'News article updated successfully');
+  });
+
+  deleteNews = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const existing = await (prisma as any).newsArticle.findUnique({ where: { id } });
+    if (!existing) {
+      return sendError(res, 404, 'News article not found');
+    }
+
+    await (prisma as any).newsArticle.delete({ where: { id } });
+
+    await logAdminAction(
+      req.user!.userId,
+      'NEWS_DELETED',
+      'NewsArticle',
+      id,
+      { title: existing.title },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { id }, 'News article deleted successfully');
+  });
+
+  toggleNewsPublish = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const existing = await (prisma as any).newsArticle.findUnique({ where: { id } });
+    if (!existing) {
+      return sendError(res, 404, 'News article not found');
+    }
+
+    const updated = await (prisma as any).newsArticle.update({
+      where: { id },
+      data: { isPublished: !existing.isPublished },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'NEWS_PUBLISH_TOGGLED',
+      'NewsArticle',
+      id,
+      { isPublished: updated.isPublished },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, updated, `Article ${updated.isPublished ? 'published' : 'moved to draft'}`);
+  });
+
+  toggleNewsFeatured = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const existing = await (prisma as any).newsArticle.findUnique({ where: { id } });
+    if (!existing) {
+      return sendError(res, 404, 'News article not found');
+    }
+
+    const updated = await (prisma as any).newsArticle.update({
+      where: { id },
+      data: { isFeatured: !existing.isFeatured },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'NEWS_FEATURED_TOGGLED',
+      'NewsArticle',
+      id,
+      { isFeatured: updated.isFeatured },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, updated, `Article ${updated.isFeatured ? 'featured' : 'unfeatured'}`);
+  });
+
+  // ─── Community Posts & Feed Moderation ────────────────────────────────────
+  getFeedPosts = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page = '1', limit = '20', search = '', filter = 'ALL' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (filter === 'PINNED') where.isPinned = true;
+    if (filter === 'PUBLISHED') where.isPublished = true;
+    if (search && typeof search === 'string') {
+      const q = search.trim();
+      where.OR = [
+        { content: { contains: q, mode: 'insensitive' } },
+        { user: { profile: { username: { contains: q, mode: 'insensitive' } } } },
+      ];
+    }
+
+    const [posts, total] = await Promise.all([
+      prisma.post.findMany({
+        where,
+        skip,
+        take: limitNum,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              profile: {
+                select: {
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              comments: true,
+              likes: true,
+            },
+          },
+        },
+        orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
+      }),
+      prisma.post.count({ where }),
+    ]);
+
+    sendSuccess(res, posts, undefined, 200, {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    });
+  });
+
+  deleteFeedPost = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { reason = 'Moderator removal' } = req.body;
+
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: { user: { select: { email: true } } },
+    });
+    if (!post) {
+      return sendError(res, 404, 'Post not found');
+    }
+
+    await prisma.post.delete({ where: { id } });
+
+    await logAdminAction(
+      req.user!.userId,
+      'POST_DELETED',
+      'Post',
+      id,
+      { authorEmail: post.user.email, reason },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { id }, 'Post deleted successfully');
+  });
+
+  togglePinFeedPost = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post) {
+      return sendError(res, 404, 'Post not found');
+    }
+
+    const updated = await prisma.post.update({
+      where: { id },
+      data: { isPinned: !post.isPinned },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'POST_PIN_TOGGLED',
+      'Post',
+      id,
+      { isPinned: updated.isPinned },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, updated, `Post ${updated.isPinned ? 'pinned to top' : 'unpinned'}`);
+  });
+
+  // ─── Careers & Jobs Management ────────────────────────────────────────────
+  getJobs = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { page = '1', limit = '20', search = '', type = 'ALL' } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string, 10));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+    if (type && type !== 'ALL') where.type = type;
+    if (search && typeof search === 'string') {
+      const q = search.trim();
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { location: { contains: q, mode: 'insensitive' } },
+        { game: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [jobs, total] = await Promise.all([
+      prisma.job.findMany({
+        where,
+        skip,
+        take: limitNum,
+        include: {
+          organization: { select: { id: true, name: true, avatar: true, verified: true } },
+          _count: { select: { applications: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.job.count({ where }),
+    ]);
+
+    sendSuccess(res, jobs, undefined, 200, {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+    });
+  });
+
+  createJob = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { title, description, type = 'PLAYER', location = 'Remote', salary, requirements = [], game, rankRequired } = req.body;
+    if (!title || !description) {
+      return sendError(res, 400, 'Title and description are required');
+    }
+
+    // Ensure official organization exists
+    let org = await prisma.organization.findFirst({ where: { verified: true } });
+    if (!org) {
+      org = await prisma.organization.create({
+        data: {
+          name: 'GamerZ Hub Official',
+          slug: `gamerz-hub-${Math.random().toString(36).substring(2, 6)}`,
+          description: 'Official Platform Esports & Talent Operations',
+          verified: true,
+          ownerId: req.user!.userId,
+        },
+      });
+    }
+
+    const job = await prisma.job.create({
+      data: {
+        title: title.trim(),
+        description: description.trim(),
+        type,
+        location,
+        salary,
+        requirements: Array.isArray(requirements) ? requirements : [requirements],
+        game: game || null,
+        rankRequired: rankRequired || null,
+        organizationId: org.id,
+      },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'JOB_CREATED',
+      'Job',
+      job.id,
+      { title: job.title, organization: org.name },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, job, 'Job posting created successfully', 201);
+  });
+
+  deleteJob = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const existing = await prisma.job.findUnique({ where: { id } });
+    if (!existing) {
+      return sendError(res, 404, 'Job not found');
+    }
+
+    await prisma.job.delete({ where: { id } });
+
+    await logAdminAction(
+      req.user!.userId,
+      'JOB_DELETED',
+      'Job',
+      id,
+      { title: existing.title },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { id }, 'Job posting deleted successfully');
+  });
+
+  // ─── Tournament Creation & Deletion (Admin Level) ─────────────────────────
+  createTournament = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const {
+      name,
+      game,
+      format = 'SINGLE_ELIMINATION',
+      startDate,
+      endDate,
+      prizePool,
+      maxParticipants = 16,
+      minTeamSize = 1,
+      maxTeamSize = 5,
+      rules,
+      description,
+    } = req.body;
+
+    if (!name || !game || !startDate) {
+      return sendError(res, 400, 'Tournament name, game, and start date are required');
+    }
+
+    let org = await prisma.organization.findFirst({ where: { verified: true } });
+    if (!org) {
+      org = await prisma.organization.create({
+        data: {
+          name: 'GamerZ Hub Official',
+          slug: `gamerz-hub-${Math.random().toString(36).substring(2, 6)}`,
+          description: 'Official Platform Esports Operations',
+          verified: true,
+          ownerId: req.user!.userId,
+        },
+      });
+    }
+
+    const tournament = await prisma.tournament.create({
+      data: {
+        title: name.trim(),
+        game: game.trim(),
+        type: (format as any) || 'SINGLE_ELIMINATION',
+        status: 'DRAFT',
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : new Date(new Date(startDate).getTime() + 86400000 * 2),
+        prizePool: parseFloat(prizePool) || 0,
+        maxTeams: parseInt(maxParticipants, 10) || 16,
+        minTeamSize: parseInt(minTeamSize, 10) || 1,
+        maxTeamSize: parseInt(maxTeamSize, 10) || 5,
+        rules: rules || null,
+        description: description || null,
+        organizerId: org.id,
+      },
+    });
+
+    await logAdminAction(
+      req.user!.userId,
+      'TOURNAMENT_CREATED',
+      'Tournament',
+      tournament.id,
+      { title: tournament.title, game: tournament.game },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, tournament, 'Tournament created successfully', 201);
+  });
+
+  deleteTournament = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const tournament = await prisma.tournament.findUnique({ where: { id } });
+    if (!tournament) {
+      return sendError(res, 404, 'Tournament not found');
+    }
+
+    await prisma.tournament.delete({ where: { id } });
+
+    await logAdminAction(
+      req.user!.userId,
+      'TOURNAMENT_DELETED',
+      'Tournament',
+      id,
+      { title: tournament.title },
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    sendSuccess(res, { id }, 'Tournament deleted successfully');
   });
 }
 
